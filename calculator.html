@@ -61,6 +61,47 @@ function readDxfGeometry(raw){
  let inEntities=false,entity=null,entities=[],unsupported=new Set(),units=4;
  for(let i=0;i<pairs.length;i++){const [code,val]=pairs[i];if(code==='9'&&val==='$INSUNITS'&&pairs[i+1]?.[0]==='70')units=Number(pairs[i+1][1]);if(code==='0'&&val==='SECTION'&&pairs[i+1]?.[0]==='2'){inEntities=pairs[i+1][1]==='ENTITIES';continue}if(code==='0'&&val==='ENDSEC'){if(entity)entities.push(entity);entity=null;inEntities=false;continue}if(!inEntities)continue;if(code==='0'){if(entity)entities.push(entity);entity=null;if(!['ENDSEC','SEQEND'].includes(val))entity={type:val,pairs:[]};continue}if(entity)entity.pairs.push([code,val])}
  if(entity)entities.push(entity);
+
+ // Раскрытие INSERT с сохранением поворота и равномерного масштаба.
+ const blocks=new Map();let inBlocks=false,currentBlock=null,currentEntity=null;
+ const flushBlockEntity=()=>{if(currentBlock&&currentEntity)currentBlock.entities.push(currentEntity);currentEntity=null};
+ for(let i=0;i<pairs.length;i++){const [code,val]=pairs[i];
+  if(code==='0'&&val==='SECTION'&&pairs[i+1]?.[0]==='2'){inBlocks=pairs[i+1][1]==='BLOCKS';continue}
+  if(!inBlocks)continue;
+  if(code==='0'&&val==='ENDSEC'){flushBlockEntity();if(currentBlock?.name)blocks.set(currentBlock.name,currentBlock);currentBlock=null;inBlocks=false;continue}
+  if(code==='0'&&val==='BLOCK'){flushBlockEntity();currentBlock={name:'',baseX:0,baseY:0,entities:[]};currentEntity={type:'BLOCK',pairs:[]};continue}
+  if(code==='0'&&val==='ENDBLK'){flushBlockEntity();if(currentBlock?.name)blocks.set(currentBlock.name,currentBlock);currentBlock=null;continue}
+  if(code==='0'){flushBlockEntity();if(currentBlock)currentEntity={type:val,pairs:[]};continue}
+  if(currentEntity){currentEntity.pairs.push([code,val]);if(currentEntity.type==='BLOCK'){if(code==='2')currentBlock.name=val;if(code==='10')currentBlock.baseX=Number(val);if(code==='20')currentBlock.baseY=Number(val)}}
+ }
+ const field=(e,c,def=0)=>{const v=e.pairs.find(p=>p[0]===String(c));return v?Number(v[1]):def};
+ const transformEntity=(e,tr)=>{
+  const out={type:e.type,pairs:e.pairs.map(p=>[...p])},pairsOut=out.pairs;
+  const set=(code,value,index=0)=>{let n=0;for(const p of pairsOut)if(p[0]===String(code)){if(n++===index){p[1]=String(value);return}}};
+  const coords=e.type==='LINE'?[[10,20],[11,21]]:e.type==='CIRCLE'||e.type==='ARC'?[[10,20]]:e.type==='LWPOLYLINE'?e.pairs.filter(p=>p[0]==='10').map((_,i)=>[10,20,i]):[];
+  for(const [xc,yc,idx=0] of coords){const xs=e.pairs.filter(p=>p[0]===String(xc)),ys=e.pairs.filter(p=>p[0]===String(yc));if(!xs[idx]||!ys[idx])throw Error('Неполные координаты в блоке');const x=Number(xs[idx][1]),y=Number(ys[idx][1]);const nx=tr.a*x+tr.b*y+tr.tx,ny=tr.c*x+tr.d*y+tr.ty;set(xc,nx,idx);set(yc,ny,idx)}
+  if(e.type==='CIRCLE'||e.type==='ARC'){set(40,field(e,40)*tr.scale);if(e.type==='ARC'){set(50,field(e,50)+tr.rotation);set(51,field(e,51)+tr.rotation)}}
+  return out;
+ };
+ const identity={a:1,b:0,c:0,d:1,tx:0,ty:0,scale:1,rotation:0};
+ const expanded=[];
+ const visit=(e,tr,depth,stack)=>{
+  if(depth>12)throw Error('Слишком глубокая вложенность блоков DXF');
+  if(e.type!=='INSERT'){expanded.push(transformEntity(e,tr));return}
+  const name=e.pairs.find(p=>p[0]==='2')?.[1],block=blocks.get(name);
+  if(!block)throw Error('Не найден блок DXF: '+name);
+  if(stack.includes(name))throw Error('Циклическая ссылка на блок: '+name);
+  const sx=field(e,41,1),sy=field(e,42,1),sz=field(e,43,1),rotation=field(e,50)*Math.PI/180;
+  if(sx<=0||sy<=0||Math.abs(sx-sy)>1e-8||Math.abs(sz-1)>1e-8)throw Error('Блок '+name+' имеет неравномерный или отрицательный масштаб; требуется преобразовать его в геометрию в CAD');
+  const cols=field(e,70,1),rows=field(e,71,1);
+  if(cols!==1||rows!==1)throw Error('Массив блоков INSERT пока не поддерживается');
+  const a=sx*Math.cos(rotation),b=-sx*Math.sin(rotation),c=sx*Math.sin(rotation),d=sx*Math.cos(rotation);
+  const tx=field(e,10)-a*block.baseX-b*block.baseY,ty=field(e,20)-c*block.baseX-d*block.baseY;
+  const child={a:tr.a*a+tr.b*c,b:tr.a*b+tr.b*d,c:tr.c*a+tr.d*c,d:tr.c*b+tr.d*d,tx:tr.a*tx+tr.b*ty+tr.tx,ty:tr.c*tx+tr.d*ty+tr.ty,scale:tr.scale*sx,rotation:tr.rotation+field(e,50)};
+  for(const nested of block.entities)visit(nested,child,depth+1,[...stack,name]);
+ };
+ for(const e of entities)visit(e,identity,0,[]);
+ entities=expanded;
  const unitFactors={0:1,1:25.4,2:304.8,4:1,5:10,6:1000,7:1000000,8:0.0000254,9:0.0254,10:914.4,11:1e-7,12:1e-6,13:0.001,14:100,15:10000,16:100000,17:1e12,18:1.495978707e14,19:9.4607304725808e18,20:3.08567758149137e19};if(!Object.prototype.hasOwnProperty.call(unitFactors,units))throw Error('Неизвестные единицы измерения DXF (код '+units+'). Укажите единицы при экспорте.');const unitFactor=unitFactors[units];
  let length=0,minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity,holes=0,accepted=0;
  const pt=(x,y)=>{if(!Number.isFinite(x)||!Number.isFinite(y))throw Error('Некорректные координаты DXF');minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y)};
