@@ -222,7 +222,8 @@ const items=[];const $=id=>document.getElementById(id),v=id=>Math.max(0,Number($
   });
   cutTable.append(details);
  });}
- let hours=weld/Math.max(.01,v('speed'))+joints*v('prep')/60,work=hours*v('rate')+weld*v('cons'),over=(metal+work)*v('over')/100,cost=metal+work+over,price=metal*(1+v('mm')/100)+work*(1+v('mw')/100)+over;let arr=[['Масса',mass.toFixed(2)+' кг'],['Стыки',joints],['Шов',weld.toFixed(2)+' м'],['Сварка',hours.toFixed(1)+' ч'],['Металл',rub(metal)],['Себестоимость',rub(cost)],['Цена',rub(price)],['Прибыль до налогов',rub(price-cost)]];$('summary').innerHTML=arr.map(([a,b])=>'<div>'+a+'<strong>'+b+'</strong></div>').join('');$('warn').textContent=warnings.join('; ')+' Закупка целыми хлыстами учтена; дополнительно проверь цены, технологические припуски, резку, доставку и налоги.'}document.querySelectorAll('input').forEach(x=>x.addEventListener('input',calc));$('add').onclick=add;add();</script><script>
+ let manualWelding=window.hasManualWelding?.()||false,hours=manualWelding?0:weld/Math.max(.01,v('speed'))+joints*v('prep')/60,work=manualWelding?0:hours*v('rate')+weld*v('cons'),over=(metal+work)*v('over')/100,cost=metal+work+over,price=metal*(1+v('mm')/100)+work*(1+v('mw')/100)+over;let arr=[['Масса',mass.toFixed(2)+' кг'],['Стыки',joints],['Шов',weld.toFixed(2)+' м'],['Сварка',hours.toFixed(1)+' ч'],['Металл',rub(metal)],['Себестоимость',rub(cost)],['Цена',rub(price)],['Прибыль до налогов',rub(price-cost)]];$('summary').innerHTML=arr.map(([a,b])=>'<div>'+a+'<strong>'+b+'</strong></div>').join('');$('warn').textContent=warnings.join('; ')+' Закупка целыми хлыстами учтена; дополнительно проверь цены, технологические припуски, резку, доставку и налоги.'}document.querySelectorAll('input').forEach(x=>x.addEventListener('input',calc));$('add').onclick=add;add();</script><script>
+window.hasManualWelding=()=>operationRows.some(o=>['Сварка MIG/MAG','Сварка MMA','Сварка TIG'].includes(o.name)&&o.qty>0);
 const operationNames=["Резка металла","Сверление отверстий","Лазерная резка","Гибка","Сварка MIG/MAG","Сварка MMA","Сварка TIG","Зачистка швов","Шлифовка","Сборка","Грунтовка","Порошковая покраска","Жидкая покраска","Доставка","Монтаж"], operationRows=[];
 const operationDefaults={"Резка металла":["шт",75],"Сверление отверстий":["шт",35],"Лазерная резка":["м",120],"Гибка":["шт",150],"Сварка MIG/MAG":["ч",500],"Сварка MMA":["ч",500],"Сварка TIG":["ч",650],"Зачистка швов":["шт",85],"Шлифовка":["м",100],"Сборка":["ч",500],"Грунтовка":["м²",180],"Порошковая покраска":["м²",350],"Жидкая покраска":["м²",280],"Доставка":["рейс",2500],"Монтаж":["ч",650]};const ratesKey='sibconstract_operation_rates_v1';
 const operationRates={};
@@ -384,8 +385,9 @@ list();
   const jointsCount=items.reduce((n,r)=>n+Math.max(0,r.q)*v('ends'),0);
   const weldMeters=items.reduce((n,r)=>n+Math.max(0,r.q)*v('ends')*(profiles[r.p]?.[4]||0)/1000,0);
   const weldHours=weldMeters/Math.max(.01,v('speed'))+jointsCount*v('prep')/60;
-  const weldingPrice=(weldHours*v('rate')+weldMeters*v('cons'))*(1+v('mw')/100);
-  const productionOverhead=(cutInfo.cost+weldHours*v('rate')+weldMeters*v('cons'))*v('over')/100;
+  const manualWelding=window.hasManualWelding?.()||false;
+  const weldingPrice=manualWelding?0:(weldHours*v('rate')+weldMeters*v('cons'))*(1+v('mw')/100);
+  const productionOverhead=(cutInfo.cost+(manualWelding?0:weldHours*v('rate')+weldMeters*v('cons')))*v('over')/100;
   const detailLines=[];
   const addDetail=(name,description,amount)=>{if(Number.isFinite(amount)&&Math.abs(amount)>.005)detailLines.push({name,description,amount})};
   addDetail('Профильный металлопрокат','Закупка и использование профильных труб и другого проката для '+profileData.reduce((n,r)=>n+r.qty,0)+' деталей',profileMetalPrice);
@@ -397,7 +399,7 @@ list();
   const parsedTotal=Number(String(price).replace(/[^0-9,.-]/g,'').replace(',','.'));
   const detailedTotal=detailLines.reduce((n,x)=>n+x.amount,0);
   const difference=parsedTotal-detailedTotal;
-  if(Number.isFinite(difference)&&Math.abs(difference)>.05)addDetail('Корректировка расчёта','Согласование детализации с итоговой стоимостью калькулятора',difference);
+  if(!Number.isFinite(parsedTotal)||Math.abs(difference)>0.10){alert('КП не сформировано: сумма статей ('+fmt(detailedTotal)+' ₽) не совпадает с итогом калькулятора ('+price+'). Проверьте расчёт или сообщите об ошибке.');return}
   const detailedRows=detailLines.map((r,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(r.name)+'</b><div class="muted">'+esc(r.description)+'</div></td><td style="text-align:right;white-space:nowrap">'+esc(fmt(r.amount))+' ₽</td></tr>').join('');
   const detailedBreakdown='<h2>Из чего складывается стоимость заказа</h2><table><thead><tr><th>№</th><th>Статья</th><th style="text-align:right">Стоимость</th></tr></thead><tbody>'+detailedRows+'</tbody></table><p class="muted">Стоимость включает материалы, изготовление и указанные дополнительные операции. Внутренние закупочные цены и производственная себестоимость в предложении не раскрываются.</p>';
   const sheetMass=sheetData.reduce((n,r)=>n+r.mass,0),profileMass=profileData.reduce((n,r)=>n+r.mass,0);
