@@ -42,7 +42,7 @@ function roundedRectangle(shape, half, radius, clockwise=false){
  if(!clockwise){shape.moveTo(x+r,y);shape.lineTo(x+w-r,y);shape.quadraticCurveTo(x+w,y,x+w,y+r);shape.lineTo(x+w,y+h-r);shape.quadraticCurveTo(x+w,y+h,x+w-r,y+h);shape.lineTo(x+r,y+h);shape.quadraticCurveTo(x,y+h,x,y+h-r);shape.lineTo(x,y+r);shape.quadraticCurveTo(x,y,x+r,y)}
  else {shape.moveTo(x+r,y);shape.quadraticCurveTo(x,y,x,y+r);shape.lineTo(x,y+h-r);shape.quadraticCurveTo(x,y+h,x+r,y+h);shape.lineTo(x+w-r,y+h);shape.quadraticCurveTo(x+w,y+h,x+w,y+h-r);shape.lineTo(x+w,y+r);shape.quadraticCurveTo(x+w,y,x+w-r,y);shape.lineTo(x+r,y)}
 }
-function centralKosour(a,b){
+function centralKosour(a,b,verticalCutX=null){
  const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),axis=end.clone().sub(start);
  const outer=new THREE.Shape();roundedRectangle(outer,.060,.010);
  const inner=new THREE.Path();roundedRectangle(inner,.056,.006,true);outer.holes.push(inner);
@@ -56,6 +56,23 @@ function centralKosour(a,b){
  const up=new THREE.Vector3().crossVectors(direction,across).normalize();
  const basis=new THREE.Matrix4().makeBasis(across,up,direction);
  mesh.position.copy(start);mesh.quaternion.setFromRotationMatrix(basis);
+ if(verticalCutX!==null){
+  // Trim the upper end to the vertical landing face, not a sloped end cap.
+  // Project the vertices of the upper end ring onto the plane X=verticalCutX.
+  mesh.updateMatrix();
+  const position=geometry.getAttribute('position');
+  const endDepth=axis.length();
+  for(let i=0;i<position.count;i++){
+   const local=new THREE.Vector3().fromBufferAttribute(position,i);
+   if(local.z>endDepth-.00001){
+    const world=local.clone().applyMatrix4(mesh.matrix);
+    world.x=verticalCutX;
+    const clipped=world.applyMatrix4(mesh.matrix.clone().invert());
+    position.setXYZ(i,clipped.x,clipped.y,clipped.z);
+   }
+  }
+  position.needsUpdate=true;geometry.computeVertexNormals();
+ }
  group.add(mesh);
 }
 // Rounded tread with 4 mm edge and corner radii.
@@ -138,7 +155,17 @@ function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').tex
  // preventing intersection along the entire tread depth.
  const clearance=.008;
  const beamStartY=H/count-treadThickness/2-beamHalf/Math.cos(slope)-Math.tan(slope)*treadDepth-clearance;
- centralKosour([-R/2,beamStartY,0],[R/2,beamRise+beamStartY,0]);
+ // Landing starts at the front edge of the final tread (50 mm beyond
+ // the last tread's rear-based going line), aligned in plan.
+ const landingFaceX=R/2+(treadDepth-goingM);
+ const beamEndY=beamStartY+(landingFaceX+R/2)*Math.tan(slope);
+ centralKosour([-R/2,beamStartY,0],[landingFaceX,beamEndY,0],landingFaceX);
+ // Upper-floor slab: finished surface at H, front face at landingFaceX.
+ // Sufficient illustrative depth to receive the stringer's vertical end.
+ const landingThickness=Math.max(.40,H-beamEndY+.10);
+ const landingLength=.75;
+ box(landingFaceX+landingLength/2,H-landingThickness/2,0,landingLength,landingThickness,W+.30,
+  new THREE.MeshStandardMaterial({color:0xa4adb6,roughness:.88}));
  for(let i=0;i<count-1;i++){
   const rearX=-R/2+i*goingM;
   const x=rearX+treadDepth/2,y=(i+1)*H/count;
@@ -147,5 +174,5 @@ function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').tex
   const supportX=x;
   const topOfBeamAtSupport=beamStartY+(supportX+R/2)*Math.tan(slope)+beamHalf/Math.cos(slope);
   stepSupport(supportX,y-treadThickness/2,topOfBeamAtSupport);
- }box(-R/2,-.06,0,.28,.12,W+.2,steel);box(R/2,H,0,.28,.12,W+.2,steel);controls.target.set(0,H/2,0);camera.position.set(R*.85+2,H*.65+2,W*2+3);controls.update()}
+ }box(-R/2,-.06,0,.28,.12,W+.2,steel);controls.target.set(0,H/2,0);camera.position.set(R*.85+2,H*.65+2,W*2+3);controls.update()}
 for(const id of ['height','run','width','treads'])$(id).addEventListener('input',render);function resize(){const r=$('view').getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix()}window.addEventListener('resize',resize);resize();render();function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}animate();
