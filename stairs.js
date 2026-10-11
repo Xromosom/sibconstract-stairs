@@ -224,9 +224,9 @@ function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').tex
  // Begin the tube near its natural intersection with the floor, and trim
  // its lower end to the plate's horizontal top face.
  // Keep a full 120x120 mm section above the horizontal mitre; only the end face is cut.
- const lowerAxisY=basePlateTop+beamHalf/Math.cos(slope)+.120;
- const lowerAxisX=-R/2+(lowerAxisY-beamStartY)/Math.tan(slope);
- centralKosour([lowerAxisX,lowerAxisY,0],[landingFaceX,beamEndY,0],landingFaceX,basePlateTop);
+ const lowerAxisX=-R/2+treadDepth/2-.085;
+ const lowerAxisY=beamStartY+(lowerAxisX+R/2)*Math.tan(slope);
+ centralKosour([lowerAxisX,lowerAxisY,0],[landingFaceX,beamEndY,0],landingFaceX,null);
  // Concrete first-floor slab, large enough to contain the entire anchorage.
  const floorLength=1.10,floorThickness=.24;
  box(lowerAxisX,floorThickness/-2,0,floorLength,floorThickness,W+.40,
