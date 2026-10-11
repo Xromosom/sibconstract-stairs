@@ -3,7 +3,37 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 const $=id=>document.getElementById(id), scene=new THREE.Scene();scene.background=new THREE.Color('#102030');
 const camera=new THREE.PerspectiveCamera(42,1,.1,200);camera.position.set(5,4,8);const renderer=new THREE.WebGLRenderer({canvas:$('view'),antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;
 const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.target.set(0,1.5,0);scene.add(new THREE.HemisphereLight(0xffffff,0x546474,2.3));const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(-3,8,6);scene.add(light);
-const group=new THREE.Group();scene.add(group);const steel=new THREE.MeshStandardMaterial({color:0x34485c,metalness:.72,roughness:.35}),wood=new THREE.MeshStandardMaterial({color:0xb98750,roughness:.7}),metalStep=new THREE.MeshStandardMaterial({color:0x8995a1,metalness:.7,roughness:.4});
+const group=new THREE.Group();scene.add(group);
+function oakTexture(){
+ const c=document.createElement('canvas');c.width=1024;c.height=512;
+ const ctx=c.getContext('2d');ctx.fillStyle='#c99b64';ctx.fillRect(0,0,c.width,c.height);
+ // Grain runs along the width of the staircase (canvas horizontal axis).
+ let seed=314159;const random=()=>{seed=(1664525*seed+1013904223)>>>0;return seed/4294967296};
+ for(let i=0;i<1150;i++){
+  const y=random()*c.height, amplitude=1+random()*7, phase=random()*6.283;
+  ctx.beginPath();
+  for(let x=0;x<=c.width;x+=8){
+   const yy=y+Math.sin(x*.012+phase)*amplitude+Math.sin(x*.035+phase*2)*1.5;
+   if(x===0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
+  }
+  ctx.strokeStyle=random()>.45?'rgba(91,48,20,0.11)':'rgba(255,232,185,0.16)';
+  ctx.lineWidth=.4+random()*2.2;ctx.stroke();
+ }
+ for(let i=0;i<20;i++){
+  const y=random()*c.height,phase=random()*6.28;
+  ctx.beginPath();
+  for(let x=0;x<=c.width;x+=6){
+   const yy=y+Math.sin(x*.009+phase)*4+Math.sin(x*.024+phase)*2;
+   if(x===0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
+  }
+  ctx.strokeStyle='rgba(107,63,32,0.22)';ctx.lineWidth=1+random()*2;ctx.stroke();
+ }
+ const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+ t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return t;
+}
+const steel=new THREE.MeshStandardMaterial({color:0x34485c,metalness:.72,roughness:.35}),
+wood=new THREE.MeshStandardMaterial({map:oakTexture(),color:0xffffff,roughness:.78,metalness:0}),
+metalStep=new THREE.MeshStandardMaterial({color:0x8995a1,metalness:.7,roughness:.4});
 // Один центральный косоур: замкнутая профильная труба 120 x 120 мм,
 // наружное скругление углов R10. Толщина стенки 4 мм — только допущение
 // для визуализации; при разработке КМ/КМД требуется уточнить.
@@ -54,6 +84,18 @@ function roundedTread(x,y,depth,thickness,width,material){
  geometry.translate(0,0,-coreThickness/2);
  geometry.rotateX(-Math.PI/2);
  geometry.computeVertexNormals();
+ // Planar grain UVs for the top/bottom; continuous grain around rounded sides.
+ // X = tread depth, Z = stair width. Texture's horizontal grain follows Z.
+ const p=geometry.getAttribute('position'),n=geometry.getAttribute('normal');
+ const uv=new Float32Array(p.count*2);
+ for(let i=0;i<p.count;i++){
+  const px=p.getX(i),py=p.getY(i),pz=p.getZ(i);
+  const nx=Math.abs(n.getX(i)),ny=Math.abs(n.getY(i)),nz=Math.abs(n.getZ(i));
+  if(ny>=nx&&ny>=nz){uv[2*i]=(pz+width/2)/width;uv[2*i+1]=(px+depth/2)/depth;}
+  else if(nx>nz){uv[2*i]=(pz+width/2)/width;uv[2*i+1]=(py+thickness/2)/thickness;}
+  else {uv[2*i]=(px+depth/2)/depth;uv[2*i+1]=(py+thickness/2)/thickness;}
+ }
+ geometry.setAttribute('uv',new THREE.BufferAttribute(uv,2));
  const mesh=new THREE.Mesh(geometry,material);
  mesh.position.set(x,y,0);group.add(mesh);
 }
