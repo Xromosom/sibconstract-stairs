@@ -42,7 +42,7 @@ function roundedRectangle(shape, half, radius, clockwise=false){
  if(!clockwise){shape.moveTo(x+r,y);shape.lineTo(x+w-r,y);shape.quadraticCurveTo(x+w,y,x+w,y+r);shape.lineTo(x+w,y+h-r);shape.quadraticCurveTo(x+w,y+h,x+w-r,y+h);shape.lineTo(x+r,y+h);shape.quadraticCurveTo(x,y+h,x,y+h-r);shape.lineTo(x,y+r);shape.quadraticCurveTo(x,y,x+r,y)}
  else {shape.moveTo(x+r,y);shape.quadraticCurveTo(x,y,x,y+r);shape.lineTo(x,y+h-r);shape.quadraticCurveTo(x,y+h,x+r,y+h);shape.lineTo(x+w-r,y+h);shape.quadraticCurveTo(x+w,y+h,x+w,y+h-r);shape.lineTo(x+w,y+r);shape.quadraticCurveTo(x+w,y,x+w-r,y);shape.lineTo(x+r,y)}
 }
-function centralKosour(a,b,verticalCutX=null){
+function centralKosour(a,b,verticalCutX=null,horizontalCutY=null){
  const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),axis=end.clone().sub(start);
  const outer=new THREE.Shape();roundedRectangle(outer,.060,.010);
  const inner=new THREE.Path();roundedRectangle(inner,.056,.006,true);outer.holes.push(inner);
@@ -56,6 +56,23 @@ function centralKosour(a,b,verticalCutX=null){
  const up=new THREE.Vector3().crossVectors(direction,across).normalize();
  const basis=new THREE.Matrix4().makeBasis(across,up,direction);
  mesh.position.copy(start);mesh.quaternion.setFromRotationMatrix(basis);
+ if(horizontalCutY!==null){
+  // Cut the lower tube end with a horizontal plane, for full bearing on base plate.
+  mesh.updateMatrix();
+  const pos=geometry.getAttribute('position');
+  const inverse=mesh.matrix.clone().invert();
+  for(let i=0;i<pos.count;i++){
+   const local=new THREE.Vector3().fromBufferAttribute(pos,i);
+   if(local.z<.00001){
+    const world=local.clone().applyMatrix4(mesh.matrix);
+    world.y=horizontalCutY;
+    const cut=world.applyMatrix4(inverse);
+    pos.setXYZ(i,cut.x,cut.y,cut.z);
+   }
+  }
+  pos.needsUpdate=true;
+  geometry.computeVertexNormals();
+ }
  if(verticalCutX!==null){
   // Trim the upper end to the vertical landing face, not a sloped end cap.
   // Project the vertices of the upper end ring onto the plane X=verticalCutX.
@@ -130,6 +147,18 @@ function roundedMountingPlate(x,y,z,length,width,thickness,radius,material){
  g.rotateX(-Math.PI/2);
  const m=new THREE.Mesh(g,material);m.position.set(x,y,z);group.add(m);
 }
+// Lower bearing plate 240x240x10 mm with four schematic M10 anchors.
+function lowerAnchorPlate(x){
+ const size=.24,thick=.010;
+ roundedMountingPlate(x,0,0,size,size,thick,.025,steel);
+ const metal=new THREE.MeshStandardMaterial({color:0xc1c8ce,metalness:.8,roughness:.3});
+ for(const dx of [-.085,.085])for(const dz of [-.085,.085]){
+  const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.005,.005,.060,12),metal);
+  shaft.position.set(x+dx,-.020,dz);group.add(shaft);
+  const head=new THREE.Mesh(new THREE.CylinderGeometry(.009,.009,.006,16),metal);
+  head.position.set(x+dx,.013,dz);group.add(head);
+ }
+}
 function upperAnchorPlate(faceX,centerY){
  // 200x200x10 mm vertical end plate, attached to the landing face.
  const thick=.010,size=.20,r=.020;
@@ -191,7 +220,17 @@ function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').tex
  // the last tread's rear-based going line), aligned in plan.
  const landingFaceX=R/2+(treadDepth-goingM);
  const beamEndY=beamStartY+(landingFaceX+R/2)*Math.tan(slope);
- centralKosour([-R/2,beamStartY,0],[landingFaceX,beamEndY,0],landingFaceX);
+ const basePlateTop=.010;
+ // Begin the tube near its natural intersection with the floor, and trim
+ // its lower end to the plate's horizontal top face.
+ const lowerAxisY=basePlateTop+beamHalf/Math.cos(slope);
+ const lowerAxisX=-R/2+(lowerAxisY-beamStartY)/Math.tan(slope);
+ centralKosour([lowerAxisX,lowerAxisY,0],[landingFaceX,beamEndY,0],landingFaceX,basePlateTop);
+ // Concrete first-floor slab, large enough to contain the entire anchorage.
+ const floorLength=1.10,floorThickness=.24;
+ box(lowerAxisX,floorThickness/-2,0,floorLength,floorThickness,W+.40,
+  new THREE.MeshStandardMaterial({color:0xa4adb6,roughness:.88}));
+ lowerAnchorPlate(lowerAxisX);
  // Upper-floor slab: finished surface at H, front face at landingFaceX.
  // Sufficient illustrative depth to receive the stringer's vertical end.
  const landingThickness=Math.max(.40,H-beamEndY+.10);
@@ -208,5 +247,5 @@ function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').tex
   const supportX=x;
   const topOfBeamAtSupport=beamStartY+(supportX+R/2)*Math.tan(slope)+beamHalf/Math.cos(slope);
   stepSupport(supportX,y-treadThickness/2,topOfBeamAtSupport);
- }box(-R/2,-.06,0,.28,.12,W+.2,steel);controls.target.set(0,H/2,0);camera.position.set(R*.85+2,H*.65+2,W*2+3);controls.update()}
+ }controls.target.set(0,H/2,0);camera.position.set(R*.85+2,H*.65+2,W*2+3);controls.update()}
 for(const id of ['height','run','width','treads'])$(id).addEventListener('input',render);function resize(){const r=$('view').getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix()}window.addEventListener('resize',resize);resize();render();function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}animate();
