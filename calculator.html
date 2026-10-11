@@ -114,7 +114,7 @@ function readDxfGeometry(raw){
  }
 
  // Замкнутые контуры: собираем цепочки линий и дуг, затем учитываем вложенные отверстия.
- let netArea=null;
+ let netArea=null,pierces=null;
  try{
   const segments=[],rings=[];
   for(const e of entities){
@@ -138,11 +138,12 @@ function readDxfGeometry(raw){
   }
   const areaPoly=pts=>Math.abs(pts.reduce((sum,p,i)=>{const q=pts[(i+1)%pts.length];return sum+p[0]*q[1]-q[0]*p[1]},0))/2;
   const inside=(p,poly)=>{let yes=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])yes=!yes}return yes};
+  pierces=rings.length;
   const ordered=rings.map(points=>({points,area:areaPoly(points)})).sort((a,b)=>b.area-a.area);
   if(ordered.length&&ordered.every(r=>r.area>0)){netArea=0;for(let i=0;i<ordered.length;i++){const ring=ordered[i];const sample=ring.points[0];const depth=ordered.slice(0,i).filter(outer=>inside(sample,outer.points)).length;netArea+=(depth%2?-1:1)*ring.area}if(netArea<=0||netArea>(maxX-minX)*(maxY-minY)*1.001)netArea=null}
- }catch(_){netArea=null}
+ }catch(_){netArea=null;pierces=null}
  if(!accepted||!Number.isFinite(length)||!(maxX>minX)||!(maxY>minY))throw Error('Не найдены поддерживаемые контуры с ненулевыми габаритами.');
- return {w:maxX-minX,h:maxY-minY,length,holes,units,unitFactor,netArea,pierces:rings.length+(segments.length?1:0),unsupported:[...unsupported]};
+ return {w:maxX-minX,h:maxY-minY,length,holes,units,unitFactor,netArea,pierces,unsupported:[...unsupported]};
 }
 document.getElementById('dxfAdd').onclick=async()=>{
  const file=document.getElementById('dxfFile').files[0],qty=Number(document.getElementById('dxfQty').value),material=Number(document.getElementById('sheetPartMaterial').value),status=document.getElementById('dxfStatus');
@@ -329,7 +330,7 @@ const el=id=>document.getElementById(id),status=s=>el('estimateStatus').textCont
 let activeId=null;
 async function authorized(){if(!sb){status('Библиотека Supabase не загружена.');return false}const {data,error}=await sb.auth.getUser();if(error||data.user?.id!==admin){status('Сначала войдите в CRM под учётной записью администратора, затем вернитесь в калькулятор.');return false}return true}
 function snapshot(){return {version:1,items:items.map(r=>({...r})),operations:operationRows.map(r=>({...r})),params:Object.fromEntries(fields.map(id=>[id,el(id).value])),laser:Object.fromEntries(laserFields.map(id=>[id,(id==='laserEnabled'||id==='laserAutoLength'||id==='laserAutoPierces')?el(id).checked:el(id).value])),sheet:{size:el('sheetPartSize').value,qty:el('sheetPartQty').value,material:el('sheetPartMaterial').value,kerf:el('sheetKerf').value,items:sheetItems.map(x=>({...x}))}}}
-function restore(data){if(data?.laser){laserFields.forEach(id=>{if(Object.prototype.hasOwnProperty.call(data.laser,id)){if(id==='laserEnabled'||id==='laserAutoLength')el(id).checked=!!data.laser[id];else el(id).value=data.laser[id]}})}else {el('laserEnabled').checked=false;el('laserAutoLength').checked=true;}if(!data||data.version!==1||!Array.isArray(data.items)||!Array.isArray(data.operations))throw Error('Неподдерживаемый формат сметы');
+function restore(data){if(data?.laser){laserFields.forEach(id=>{if(Object.prototype.hasOwnProperty.call(data.laser,id)){if(id==='laserEnabled'||id==='laserAutoLength'||id==='laserAutoPierces')el(id).checked=!!data.laser[id];else el(id).value=data.laser[id]}})}else {el('laserEnabled').checked=false;el('laserAutoLength').checked=true;el('laserAutoPierces').checked=true;}if(!data||data.version!==1||!Array.isArray(data.items)||!Array.isArray(data.operations))throw Error('Неподдерживаемый формат сметы');
  items.splice(0,items.length,...data.items.filter(r=>Number.isInteger(r.p)&&profiles[r.p]&&Number.isFinite(r.l)&&Number.isFinite(r.q)&&r.l>=0&&r.q>=0).map(r=>({p:r.p,l:r.l,q:r.q})));
  operationRows.splice(0,operationRows.length,...data.operations.filter(o=>operationNames.includes(o.name)).map(o=>({name:o.name,unit:String(o.unit||getRate(o.name).unit),qty:Math.max(0,Number(o.qty)||0),cost:Math.max(0,Number(o.cost)||0),markup:Math.max(0,Number(o.markup)||0)})));
  fields.forEach(id=>{if(data.params&&data.params[id]!==undefined&&Number.isFinite(Number(data.params[id])))el(id).value=data.params[id]});
