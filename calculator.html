@@ -157,7 +157,7 @@ function parseSheetSize(raw){const m=String(raw).trim().replace(/\s/g,'').replac
 function recalcSheets(){
  const tbody=document.getElementById('sheetItemsRows'),output=document.getElementById('sheetPartResult');tbody.textContent='';
  const kerf=Number(document.getElementById('sheetKerf').value);
- if(!Number.isFinite(kerf)||kerf<0){output.textContent='Некорректный зазор реза.';return}
+ if(!Number.isFinite(kerf)||kerf<0){window.sheetUnplaced=true;output.textContent='Некорректный зазор реза.';return}
  let cost=0,area=0,bought=0,buyMass=0,warnings=[];
  const groups=new Map();
  sheetItems.forEach((it,i)=>{const p=sheetCatalog[it.material];if(!p)return;const key=String(it.material);if(!groups.has(key))groups.set(key,[]);groups.get(key).push({...it,index:i})});
@@ -175,7 +175,7 @@ function recalcSheets(){
   group.forEach(it=>{const count=bins.reduce((sum,b)=>sum+b.used.filter(n=>n===it.index).length,0);allocations.set(it.index,count);area+=(it.netArea??it.w*it.h)*count/1e6});
   group.forEach((it,rowIndex)=>{const tr=document.createElement('tr');const count=allocations.get(it.index)||0;const values=[p.name+' '+p.widthMm+'х'+p.heightMm,it.w+'х'+it.h,it.qty,rowIndex===0?bins.length:'—',rowIndex===0?rub(groupCost):'Учтено выше'];values.forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td)});const td=document.createElement('td'),btn=document.createElement('button');btn.textContent='×';btn.type='button';btn.onclick=()=>{sheetItems.splice(it.index,1);recalcSheets()};td.append(btn);tr.append(td);tbody.append(tr)});
  }
- window.sheetBuyMass=buyMass;window.sheetCutCost=cost;window.sheetCutSale=cost*(1+v('mm')/100);
+ window.sheetUnplaced=warnings.length>0;window.sheetBuyMass=buyMass;window.sheetCutCost=cost;window.sheetCutSale=cost*(1+v('mm')/100);
  output.textContent='Закупка сгруппирована по материалам (повторные строки не удваивают стоимость). Закупить: '+bought+' лист(ов) · Площадь деталей: '+area.toFixed(3)+' м² · Закупка: '+rub(cost)+' · Цена с наценкой: '+rub(window.sheetCutSale)+'. Раскрой предварительный (прямоугольные детали, поворот 90°, зазор реза). '+warnings.join('; ');
  calc();
 }
@@ -189,6 +189,7 @@ fetch('./stalk_sheets_2026_10_06.json').then(r=>r.json()).then(data=>{
  if(window.pendingSheetItems){sheetItems.push(...window.pendingSheetItems);window.pendingSheetItems=null;recalcSheets()}
 }).catch(()=>{document.getElementById('stalkSheetRows').textContent='Не удалось загрузить листовой прокат'});
 const items=[];const $=id=>document.getElementById(id),v=id=>Math.max(0,Number($(id).value)||0),rub=n=>n.toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽';function add(){if(profiles.length<=legacyProfileCount){alert('Справочник СТАЛЬК ещё загружается. Повторите через несколько секунд.');return}items.push({p:legacyProfileCount,l:1000,q:1});render()}function render(){const tbody=$('rows');tbody.textContent='';items.forEach((r,i)=>{let tr=document.createElement('tr');let td=()=>{let x=document.createElement('td');tr.append(x);return x};let sel=document.createElement('select');profiles.forEach((p,j)=>{if(j<legacyProfileCount&&j!==r.p)return;let o=document.createElement('option');o.value=j;o.textContent=p[0];o.selected=j===r.p;sel.append(o)});sel.onchange=()=>{r.p=+sel.value;render()};td().append(sel);for(let k of ['l','q']){let inp=document.createElement('input');inp.type='number';inp.min=0;inp.value=r[k];inp.oninput=()=>{r[k]=Math.max(0,+inp.value||0);calc()};td().append(inp)}for(let j=0;j<4;j++)td();let b=document.createElement('button');b.textContent='×';b.onclick=()=>{items.splice(i,1);render()};td().append(b);tbody.append(tr)});calc()}function calc(){let mass=0,metal=0,joints=0,weld=0,warnings=[];items.forEach((r,i)=>{let p=profiles[r.p],m=r.l*r.q*p[1]/1000,j=r.q*v('ends'),w=j*p[4]/1000,c=m*p[3]/1000;mass+=m;metal+=c;joints+=j;weld+=w;let cells=$('rows').children[i].children;[m.toFixed(2),j,w.toFixed(2),rub(c)].forEach((x,k)=>cells[k+3].textContent=x);if(r.l>p[2])warnings.push(p[0]+': длина превышает стандартный хлыст')});const cut=calculateCutting();
+ warnings.push(...cut.warnings);
  metal=cut.cost;
  const cutBox=document.getElementById('cutSummary');
  if(cutBox)cutBox.textContent='Масса деталей: '+cut.partMass.toFixed(2)+' кг · Закупка: '+cut.buyMass.toFixed(2)+' кг · Хлыстов: '+cut.bars+' · Отходы: '+cut.scrap.toFixed(2)+' м · Стоимость закупки: '+rub(cut.cost);
@@ -354,6 +355,8 @@ list();
  const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  btn.onclick=()=>{
   if(!items.some(r=>r.q>0&&r.l>0&&profiles[r.p])&&!sheetItems.some(r=>r.qty>0&&sheetCatalog[r.material])){alert('Добавьте хотя бы одну профильную или листовую деталь перед созданием коммерческого предложения.');return}
+  if(window.sheetUnplaced){alert('Коммерческое предложение не сформировано: есть листовые детали, которые не помещаются в выбранный лист, или ошибка параметров раскроя. Проверьте блок листового металла.');return}
+  if(document.getElementById('laserEnabled').checked&&!operationRows.some(o=>o.name==='Лазерная резка'&&o.qty>0)&&laserEstimate().invalid){alert('Проверьте параметры лазерной резки: расчёт недействителен.');return}
   const summary=document.querySelectorAll('#summary > div');
   const price=summary[6]?.querySelector('strong')?.textContent||'—';
   const warning=document.getElementById('warn')?.textContent||'';
