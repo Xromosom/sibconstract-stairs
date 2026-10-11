@@ -99,6 +99,30 @@ function roundedTread(x,y,depth,thickness,width,material){
  const mesh=new THREE.Mesh(geometry,material);
  mesh.position.set(x,y,0);group.add(mesh);
 }
+// Vertical 100x100 mm tube support, R10 outer corners; 4 mm assumed wall.
+// Top mounting plate: 180x180x5 mm, four visible screw heads underneath.
+function stepSupport(x,treadBottom,beamTop){
+ const plateThickness=.005,plateSize=.18,tubeSide=.100,tubeWall=.004;
+ const plateBottom=treadBottom-plateThickness;
+ const postBottom=beamTop-.035; // overlap with central stringer represents weld
+ const postHeight=Math.max(.015,plateBottom-postBottom);
+ const outer=new THREE.Shape();roundedRectangle(outer,tubeSide/2,.010);
+ const hole=new THREE.Path();roundedRectangle(hole,tubeSide/2-tubeWall,.006,true);
+ outer.holes.push(hole);
+ const g=new THREE.ExtrudeGeometry(outer,{depth:postHeight,bevelEnabled:false,curveSegments:8});
+ g.rotateX(-Math.PI/2);
+ const tube=new THREE.Mesh(g,steel);
+ // Extrusion after rotation runs upward along Y.
+ tube.position.set(x,postBottom,0);group.add(tube);
+ box(x,plateBottom+plateThickness/2,0,plateSize,plateThickness,plateSize,steel);
+ const screwMat=new THREE.MeshStandardMaterial({color:0xb9bec3,metalness:.85,roughness:.3});
+ for(const dx of [-.073,.073])for(const dz of [-.073,.073]){
+  const head=new THREE.Mesh(new THREE.CylinderGeometry(.005,.005,.002,12),screwMat);
+  head.position.set(x+dx,plateBottom-.001, dz);group.add(head);
+  const slot=new THREE.Mesh(new THREE.BoxGeometry(.006,.0005,.001),steel);
+  slot.position.set(x+dx,plateBottom-.0021,dz);group.add(slot);
+ }
+}
 function box(x,y,z,w,h,d,mat){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);group.add(m)}
 function read(){const h=Number($('height').value),r=Number($('run').value),w=Number($('width').value);if(![h,r,w].every(Number.isFinite)||h<1800||h>4500||r<1800||r>7000||w<600||w>1600)return null;const count=Math.max(1,Math.round(h/170)),rise=h/count,going=r/(count-1),angle=Math.atan(h/r)*180/Math.PI;return {h,r,w,count,rise,going,angle}}
 function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').textContent='Проверьте размеры: высота 1800–4500 мм, длина 1800–7000 мм, ширина 600–1600 мм.';group.clear();return}const {h,r,w,count,rise,going,angle}=v;const good=rise>=150&&rise<=190&&going>=250&&going<=320&&angle>=25&&angle<=42;$('warning').textContent=good?'Геометрия выглядит предварительно допустимой, но требует проверки по применимым нормам, месту установки и конструктивным ограничениям.':'Внимание: геометрия может быть неудобной или небезопасной. Измените длину или высоту и обратитесь к проектировщику.';$('stats').innerHTML=[['Подъёмов',count],['Высота подъёма',rise.toFixed(1)+' мм'],['Глубина проступи',going.toFixed(1)+' мм'],['Уклон',angle.toFixed(1)+'°'],['Ширина',w+' мм'],['Длина',r+' мм']].map(([a,b])=>'<div class="stat"><span class="muted">'+a+'</span><b>'+b+'</b></div>').join('');const unusedProjectSummary=`Заявка из онлайн-конструктора лестниц.\nТип: прямая маршевая.\nВысота между чистыми полами: ${h} мм.\nДоступная длина: ${r} мм.\nШирина марша: ${w} мм.\nМатериал ступеней: ${$('treads').value==='wood'?'дерево':'металл'}.\nПредварительно: ${count} подъёмов по ${rise.toFixed(1)} мм; глубина проступи ${going.toFixed(1)} мм; уклон ${angle.toFixed(1)}°.\nКосоур: одна центральная профильная труба 120×120 мм, R10 (стенка 4 мм условно). Требуется проверка и профессиональный проект.`;
@@ -119,5 +143,9 @@ function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').tex
   const rearX=-R/2+i*goingM;
   const x=rearX+treadDepth/2,y=(i+1)*H/count;
   roundedTread(x,y,treadDepth,treadThickness,W,$('treads').value==='wood'?wood:metalStep);
+  // Support sits beneath each tread, close to its rear third.
+  const supportX=rearX+treadDepth*.36;
+  const topOfBeamAtSupport=beamStartY+(supportX+R/2)*Math.tan(slope)+beamHalf/Math.cos(slope);
+  stepSupport(supportX,y-treadThickness/2,topOfBeamAtSupport);
  }box(-R/2,-.06,0,.28,.12,W+.2,steel);box(R/2,H,0,.28,.12,W+.2,steel);controls.target.set(0,H/2,0);camera.position.set(R*.85+2,H*.65+2,W*2+3);controls.update()}
 for(const id of ['height','run','width','treads'])$(id).addEventListener('input',render);function resize(){const r=$('view').getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix()}window.addEventListener('resize',resize);resize();render();function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}animate();
