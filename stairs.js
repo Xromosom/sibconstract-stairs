@@ -102,7 +102,7 @@ function roundedTread(x,y,depth,thickness,width,material){
 // Vertical 100x100 mm tube support, R10 outer corners; 4 mm assumed wall.
 // Top mounting plate: 180x180x5 mm, four visible screw heads underneath.
 function stepSupport(x,treadBottom,beamTop){
- const plateThickness=.005,plateSize=.18,tubeSide=.100,tubeWall=.004;
+ const plateThickness=.005,plateLength=.18,plateWidth=.30,tubeSide=.100,tubeWall=.004;
  const plateBottom=treadBottom-plateThickness;
  const postBottom=beamTop-.035; // overlap with central stringer represents weld
  const postHeight=Math.max(.015,plateBottom-postBottom);
@@ -114,9 +114,9 @@ function stepSupport(x,treadBottom,beamTop){
  const tube=new THREE.Mesh(g,steel);
  // Extrusion after rotation runs upward along Y.
  tube.position.set(x,postBottom,0);group.add(tube);
- box(x,plateBottom+plateThickness/2,0,plateSize,plateThickness,plateSize,steel);
+ box(x,plateBottom+plateThickness/2,0,plateLength,plateThickness,plateWidth,steel);
  const screwMat=new THREE.MeshStandardMaterial({color:0xb9bec3,metalness:.85,roughness:.3});
- for(const dx of [-.073,.073])for(const dz of [-.073,.073]){
+ for(const dx of [-.073,.073])for(const dz of [-.128,.128]){
   const head=new THREE.Mesh(new THREE.CylinderGeometry(.005,.005,.002,12),screwMat);
   head.position.set(x+dx,plateBottom-.001, dz);group.add(head);
   const slot=new THREE.Mesh(new THREE.BoxGeometry(.006,.0005,.001),steel);
