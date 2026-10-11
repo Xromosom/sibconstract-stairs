@@ -222,7 +222,6 @@ const items=[];const $=id=>document.getElementById(id),v=id=>Math.max(0,Number($
   });
   cutTable.append(details);
  });}
- warnings.push(...cut.warnings);
  let hours=weld/Math.max(.01,v('speed'))+joints*v('prep')/60,work=hours*v('rate')+weld*v('cons'),over=(metal+work)*v('over')/100,cost=metal+work+over,price=metal*(1+v('mm')/100)+work*(1+v('mw')/100)+over;let arr=[['Масса',mass.toFixed(2)+' кг'],['Стыки',joints],['Шов',weld.toFixed(2)+' м'],['Сварка',hours.toFixed(1)+' ч'],['Металл',rub(metal)],['Себестоимость',rub(cost)],['Цена',rub(price)],['Прибыль до налогов',rub(price-cost)]];$('summary').innerHTML=arr.map(([a,b])=>'<div>'+a+'<strong>'+b+'</strong></div>').join('');$('warn').textContent=warnings.join('; ')+' Закупка целыми хлыстами учтена; дополнительно проверь цены, технологические припуски, резку, доставку и налоги.'}document.querySelectorAll('input').forEach(x=>x.addEventListener('input',calc));$('add').onclick=add;add();</script><script>
 const operationNames=["Резка металла","Сверление отверстий","Лазерная резка","Гибка","Сварка MIG/MAG","Сварка MMA","Сварка TIG","Зачистка швов","Шлифовка","Сборка","Грунтовка","Порошковая покраска","Жидкая покраска","Доставка","Монтаж"], operationRows=[];
 const operationDefaults={"Резка металла":["шт",75],"Сверление отверстий":["шт",35],"Лазерная резка":["м",120],"Гибка":["шт",150],"Сварка MIG/MAG":["ч",500],"Сварка MMA":["ч",500],"Сварка TIG":["ч",650],"Зачистка швов":["шт",85],"Шлифовка":["м",100],"Сборка":["ч",500],"Грунтовка":["м²",180],"Порошковая покраска":["м²",350],"Жидкая покраска":["м²",280],"Доставка":["рейс",2500],"Монтаж":["ч",650]};const ratesKey='sibconstract_operation_rates_v1';
@@ -369,7 +368,7 @@ list();
   const lead=document.getElementById('proposalLead').value.trim()||'По согласованию';
   const validity=document.getElementById('proposalValidity').value.trim()||'По согласованию';
   const fmt=n=>Number(n).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const sheetData=sheetItems.filter(r=>r.qty>0&&sheetCatalog[r.material]).map(r=>{const p=sheetCatalog[r.material];return {name:p.name,size:r.w.toFixed(1)+' × '+r.h.toFixed(1)+' мм'+(r.dxfName?' (DXF: '+r.dxfName+')':''),qty:r.qty,mass:(r.netArea??r.w*r.h)*r.qty/(p.widthMm*p.heightMm)*p.kgPerSheet,area:r.w*r.h*r.qty,perimeter:(r.cutLength??2*(r.w+r.h))*r.qty}}); 
+  const sheetData=sheetItems.filter(r=>r.qty>0&&sheetCatalog[r.material]).map(r=>{const p=sheetCatalog[r.material];return {name:p.name,size:r.w.toFixed(1)+' × '+r.h.toFixed(1)+' мм'+(r.dxfName?' (DXF: '+r.dxfName+')':''),qty:r.qty,mass:(r.netArea??r.w*r.h)*r.qty/(p.widthMm*p.heightMm)*p.kgPerSheet,area:(r.netArea??r.w*r.h)*r.qty,perimeter:(r.cutLength??2*(r.w+r.h))*r.qty}}); 
   const profileData=items.filter(r=>r.q>0&&r.l>0&&profiles[r.p]).map(r=>({name:profiles[r.p][0],size:r.l+' мм',qty:r.q,mass:r.l*r.q*profiles[r.p][1]/1000}));
   const sheetArea=sheetData.reduce((n,r)=>n+r.area,0),sheetPerimeter=sheetData.reduce((n,r)=>n+r.perimeter,0);
   const sheetSale=window.sheetCutSale||0;
@@ -379,6 +378,28 @@ list();
   const laserTotal=laserSale+manualLaser;
   const sheetPriceRows=sheetData.map(r=>{const metalPart=sheetArea?sheetSale*r.area/sheetArea:0;const laserPart=sheetPerimeter?laserTotal*r.perimeter/sheetPerimeter:0;return {...r,estimatedPrice:metalPart+laserPart}});
   const rows=[...profileData.map(r=>({name:r.name,size:r.size,qty:r.qty,mass:r.mass,estimatedPrice:null})),...sheetPriceRows].map((r,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.size)+'</td><td>'+esc(r.qty)+'</td><td>'+esc(fmt(r.mass))+'</td><td>'+(r.estimatedPrice===null?'В составе заказа':esc(fmt(r.estimatedPrice/r.qty))+' ₽')+'</td></tr>').join('');
+  // Клиентская расшифровка цены без раскрытия внутренних закупочных цен и прибыли.
+  const cutInfo=calculateCutting();
+  const profileMetalPrice=cutInfo.cost*(1+v('mm')/100);
+  const jointsCount=items.reduce((n,r)=>n+Math.max(0,r.q)*v('ends'),0);
+  const weldMeters=items.reduce((n,r)=>n+Math.max(0,r.q)*v('ends')*(profiles[r.p]?.[4]||0)/1000,0);
+  const weldHours=weldMeters/Math.max(.01,v('speed'))+jointsCount*v('prep')/60;
+  const weldingPrice=(weldHours*v('rate')+weldMeters*v('cons'))*(1+v('mw')/100);
+  const productionOverhead=(cutInfo.cost+weldHours*v('rate')+weldMeters*v('cons'))*v('over')/100;
+  const detailLines=[];
+  const addDetail=(name,description,amount)=>{if(Number.isFinite(amount)&&Math.abs(amount)>.005)detailLines.push({name,description,amount})};
+  addDetail('Профильный металлопрокат','Закупка и использование профильных труб и другого проката для '+profileData.reduce((n,r)=>n+r.qty,0)+' деталей',profileMetalPrice);
+  addDetail('Сварочные работы','Подготовка и сварка соединений · расчётно '+jointsCount.toFixed(0)+' соединений, '+weldMeters.toFixed(2)+' м шва',weldingPrice);
+  addDetail('Общепроизводственные расходы','Организация изготовления, оборудование и сопутствующие затраты',productionOverhead);
+  addDetail('Листовой металл','Стоимость металла непосредственно в деталях',sheetSale);
+  operationRows.forEach(o=>{const amount=o.qty*o.cost*(1+o.markup/100);addDetail(o.name||'Дополнительная операция',String(Number(o.qty.toFixed(3)))+' '+o.unit,amount)});
+  if(laserSale>0)addDetail('Лазерная резка','Резка листовых деталей на оборудовании исполнителя',laserSale);
+  const parsedTotal=Number(String(price).replace(/[^0-9,.-]/g,'').replace(',','.'));
+  const detailedTotal=detailLines.reduce((n,x)=>n+x.amount,0);
+  const difference=parsedTotal-detailedTotal;
+  if(Number.isFinite(difference)&&Math.abs(difference)>.05)addDetail('Корректировка расчёта','Согласование детализации с итоговой стоимостью калькулятора',difference);
+  const detailedRows=detailLines.map((r,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(r.name)+'</b><div class="muted">'+esc(r.description)+'</div></td><td style="text-align:right;white-space:nowrap">'+esc(fmt(r.amount))+' ₽</td></tr>').join('');
+  const detailedBreakdown='<h2>Из чего складывается стоимость заказа</h2><table><thead><tr><th>№</th><th>Статья</th><th style="text-align:right">Стоимость</th></tr></thead><tbody>'+detailedRows+'</tbody></table><p class="muted">Стоимость включает материалы, изготовление и указанные дополнительные операции. Внутренние закупочные цены и производственная себестоимость в предложении не раскрываются.</p>';
   const sheetMass=sheetData.reduce((n,r)=>n+r.mass,0),profileMass=profileData.reduce((n,r)=>n+r.mass,0);
   const breakdown=sheetData.length?'<h2>Состав стоимости листовых деталей</h2><table><tbody><tr><td>Металл (с наценкой)</td><td>'+esc(fmt(sheetSale))+' ₽</td></tr><tr><td>Лазерная резка (с наценкой)</td><td>'+esc(fmt(laserTotal))+' ₽</td></tr></tbody></table><p class="muted">Клиент оплачивает только металл в деталях (с учётом отверстий, когда площадь известна); остатки листа остаются у исполнителя. Лазерная резка распределена пропорционально длине контура. Это ориентировочное распределение, не отдельная твёрдая цена. Прочие работы и расходы учтены в общей сумме КП.</p>':'';
   const date=new Date().toLocaleDateString('ru-RU');
@@ -395,7 +416,7 @@ list();
    '<div class="brand"><span class="mark">С</span><span>СИБКОНСТРАКТ<small>Металлоконструкции на заказ · <span class="web">sibconstract.github.io</span></small></span></div><div class="top"><div><b>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</b><br><span class="muted">от '+esc(date)+'</span></div><div><b>Заказчик:</b><br>'+esc(customer)+'</div></div>'+
    '<h1>'+esc(title)+'</h1><p>Предлагаем выполнить работы по следующей спецификации:</p>'+
    '<table><thead><tr><th>№</th><th>Материал / профиль</th><th>Размер детали</th><th>Кол-во, шт.</th><th>Масса, кг</th><th>Расчётная цена за шт.</th></tr></thead><tbody>'+rows+'</tbody></table>'+
-   '<p><b>Масса листовых деталей:</b> '+esc(fmt(sheetMass))+' кг · <b>Масса профильных деталей:</b> '+esc(fmt(profileMass))+' кг · <b>Общая масса деталей:</b> '+esc(fmt(sheetMass+profileMass))+' кг</p>'+breakdown+'<div class="total">Стоимость предложения: '+esc(price)+'</div>'+
+   '<p><b>Масса листовых деталей:</b> '+esc(fmt(sheetMass))+' кг · <b>Масса профильных деталей:</b> '+esc(fmt(profileMass))+' кг · <b>Общая масса деталей:</b> '+esc(fmt(sheetMass+profileMass))+' кг</p>'+detailedBreakdown+'<div class="total">Стоимость предложения: '+esc(price)+'</div>'+
    '<p><b>Срок изготовления:</b> '+esc(lead)+'</p><p><b>Предложение действительно:</b> '+esc(validity)+'</p>'+
    '<p>Комплектация, доставка, монтаж и условия оплаты согласовываются отдельно, если они не включены в утверждённую смету.</p>'+
    '<div class="footer"><b>СИБКОНСТРАКТ</b> · sibconstract.github.io<br>Предложение подготовлено на основании текущего расчёта. Условия заказа уточняются при согласовании.</div>'+
