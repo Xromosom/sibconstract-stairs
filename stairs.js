@@ -149,10 +149,10 @@ function roundedMountingPlate(x,y,z,length,width,thickness,radius,material){
 }
 // Lower bearing plate 240x240x10 mm with four schematic M10 anchors.
 function lowerAnchorPlate(x){
- const size=.24,thick=.010;
+ const size=.30,thick=.010;
  roundedMountingPlate(x,0,0,size,size,thick,.025,steel);
  const metal=new THREE.MeshStandardMaterial({color:0xc1c8ce,metalness:.8,roughness:.3});
- for(const dx of [-.085,.085])for(const dz of [-.085,.085]){
+ for(const dx of [-.115,.115])for(const dz of [-.115,.115]){
   const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.005,.005,.060,12),metal);
   shaft.position.set(x+dx,-.020,dz);group.add(shaft);
   const head=new THREE.Mesh(new THREE.CylinderGeometry(.009,.009,.006,16),metal);
@@ -231,7 +231,7 @@ function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').tex
  const floorLength=1.10,floorThickness=.24;
  box(lowerAxisX,floorThickness/-2,0,floorLength,floorThickness,W+.40,
   new THREE.MeshStandardMaterial({color:0xa4adb6,roughness:.88}));
- lowerAnchorPlate(lowerAxisX+.075);
+ lowerAnchorPlate(lowerAxisX+.150);
  // Upper-floor slab: finished surface at H, front face at landingFaceX.
  // Sufficient illustrative depth to receive the stringer's vertical end.
  const landingThickness=Math.max(.40,H-beamEndY+.10);
