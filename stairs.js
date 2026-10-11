@@ -231,7 +231,7 @@ function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').tex
  const floorLength=1.10,floorThickness=.24;
  box(lowerAxisX,floorThickness/-2,0,floorLength,floorThickness,W+.40,
   new THREE.MeshStandardMaterial({color:0xa4adb6,roughness:.88}));
- lowerAnchorPlate(lowerAxisX);
+ lowerAnchorPlate(lowerAxisX+.075);
  // Upper-floor slab: finished surface at H, front face at landingFaceX.
  // Sufficient illustrative depth to receive the stringer's vertical end.
  const landingThickness=Math.max(.40,H-beamEndY+.10);
