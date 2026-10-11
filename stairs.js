@@ -143,8 +143,8 @@ function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').tex
   const rearX=-R/2+i*goingM;
   const x=rearX+treadDepth/2,y=(i+1)*H/count;
   roundedTread(x,y,treadDepth,treadThickness,W,$('treads').value==='wood'?wood:metalStep);
-  // Support sits beneath each tread, close to its rear third.
-  const supportX=rearX+treadDepth*.36;
+  // Center the 100x100 support and its 300 mm plate under each tread.
+  const supportX=x;
   const topOfBeamAtSupport=beamStartY+(supportX+R/2)*Math.tan(slope)+beamHalf/Math.cos(slope);
   stepSupport(supportX,y-treadThickness/2,topOfBeamAtSupport);
  }box(-R/2,-.06,0,.28,.12,W+.2,steel);box(R/2,H,0,.28,.12,W+.2,steel);controls.target.set(0,H/2,0);camera.position.set(R*.85+2,H*.65+2,W*2+3);controls.update()}
