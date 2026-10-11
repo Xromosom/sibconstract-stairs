@@ -3,7 +3,17 @@
  const cutBox=document.getElementById('cutSummary');
  if(cutBox)cutBox.textContent='Масса деталей: '+cut.partMass.toFixed(2)+' кг · Закупка: '+cut.buyMass.toFixed(2)+' кг · Хлыстов: '+cut.bars+' · Отходы: '+cut.scrap.toFixed(2)+' м · Стоимость закупки: '+rub(cut.cost);
  const cutTable=document.getElementById('cutTable');
- if(cutTable){cutTable.textContent='';const t=document.createElement('table');t.innerHTML='<thead><tr><th>Профиль</th><th>Хлыст, мм</th><th>Хлыстов</th><th>Отходы, м</th><th>Закупка, ₽</th></tr></thead>';const body=document.createElement('tbody');cut.groups.forEach(g=>{const tr=document.createElement('tr');[g.name,g.stock,g.bars,g.scrap.toFixed(2),rub(g.cost)].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.append(td)});body.append(tr)});t.append(body);cutTable.append(t)}
+ if(cutTable){cutTable.textContent='';const t=document.createElement('table');t.innerHTML='<thead><tr><th>Профиль</th><th>Хлыст, мм</th><th>Хлыстов</th><th>Отходы, м</th><th>Закупка, ₽</th></tr></thead>';const body=document.createElement('tbody');cut.groups.forEach(g=>{const tr=document.createElement('tr');[g.name,g.stock,g.bars,g.scrap.toFixed(2),rub(g.cost)].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.append(td)});body.append(tr)});t.append(body);cutTable.append(t);
+ cut.groups.forEach(g=>{
+  const heading=document.createElement('h3');heading.textContent=g.name+' — последовательность раскроя';cutTable.append(heading);
+  const list=document.createElement('ol');
+  g.layouts.forEach((bar,i)=>{
+   const li=document.createElement('li');
+   li.textContent='Хлыст '+(i+1)+': '+bar.segments.map(n=>n+' мм').join(' + ')+' · резы: '+bar.segments.length+' × '+v('kerf')+' мм · остаток: '+bar.remaining.toFixed(1)+' мм';
+   list.append(li);
+  });
+  cutTable.append(list);
+ });}
  warnings.push(...cut.warnings);
  let hours=weld/Math.max(.01,v('speed'))+joints*v('prep')/60,work=hours*v('rate')+weld*v('cons'),over=(metal+work)*v('over')/100,cost=metal+work+over,price=metal*(1+v('mm')/100)+work*(1+v('mw')/100)+over;let arr=[['Масса',mass.toFixed(2)+' кг'],['Стыки',joints],['Шов',weld.toFixed(2)+' м'],['Сварка',hours.toFixed(1)+' ч'],['Металл',rub(metal)],['Себестоимость',rub(cost)],['Цена',rub(price)],['Прибыль до налогов',rub(price-cost)]];$('summary').innerHTML=arr.map(([a,b])=>'<div>'+a+'<strong>'+b+'</strong></div>').join('');$('warn').textContent=warnings.join('; ')+' Закупка целыми хлыстами учтена; дополнительно проверь цены, технологические припуски, резку, доставку и налоги.'}document.querySelectorAll('input').forEach(x=>x.addEventListener('input',calc));$('add').onclick=add;add();</script><script>
 const operationNames=["Резка металла","Сверление отверстий","Лазерная резка","Гибка","Сварка MIG/MAG","Сварка MMA","Сварка TIG","Зачистка швов","Шлифовка","Сборка","Грунтовка","Порошковая покраска","Жидкая покраска","Доставка","Монтаж"], operationRows=[];
@@ -20,24 +30,35 @@ document.getElementById('addop').onclick=()=>{const name=operationNames[0];opera
 function calculateCutting(){
  const grouped=new Map(),warnings=[];let partMass=0,buyMass=0,cost=0,bars=0,scrap=0;
  const kerf=v('kerf');
- items.forEach((r,i)=>{const p=profiles[r.p],length=Number(r.l)||0,qty=Math.floor(Number(r.q)||0);if(length<=0||qty<=0)return;
- partMass+=length/1000*qty*p[1];
- if(!Number.isInteger(Number(r.q)))warnings.push('Строка '+(i+1)+': количество округлено вниз до целого.');
- if(length>p[2]){warnings.push(p[0]+': деталь '+length+' мм длиннее хлыста '+p[2]+' мм; закупка для неё не рассчитана.');return}
- if(length+kerf>p[2]){warnings.push(p[0]+': деталь с учётом реза не помещается в хлыст.');return}
- const key=String(r.p);if(!grouped.has(key))grouped.set(key,{p,parts:[]});grouped.get(key).parts.push({length,qty});
+ items.forEach((r,i)=>{
+  const p=profiles[r.p],length=Number(r.l)||0,rawQty=Number(r.q)||0,qty=Math.floor(rawQty);
+  if(length<=0||qty<=0)return;
+  partMass+=length/1000*qty*p[1];
+  if(!Number.isInteger(rawQty))warnings.push('Строка '+(i+1)+': количество округлено вниз до целого.');
+  if(length+kerf>p[2]){warnings.push(p[0]+': деталь '+length+' мм с учётом реза не помещается в хлыст '+p[2]+' мм; закупка для неё не рассчитана.');return}
+  const key=String(r.p);
+  if(!grouped.has(key))grouped.set(key,{p,parts:[]});
+  grouped.get(key).parts.push({length,qty});
  });
  const groups=[];
  for(const {p,parts} of grouped.values()){
-  const stock=p[2],bins=[],ordered=parts.sort((a,b)=>b.length-a.length);
-  let pieces=0,unallocated=false;
-  for(const part of ordered){pieces+=part.qty;if(pieces>20000){warnings.push(p[0]+': слишком много деталей для расчёта раскроя (лимит 20 000).');unallocated=true;break}
-   for(let n=0;n<part.qty;n++){const needed=part.length+kerf;let index=bins.findIndex(rem=>rem+1e-8>=needed);if(index<0)bins.push(stock-needed);else bins[index]-=needed}
+  const stock=p[2],ordered=parts.slice().sort((a,b)=>b.length-a.length);
+  const totalPieces=ordered.reduce((s,x)=>s+x.qty,0);
+  if(totalPieces>20000){warnings.push(p[0]+': слишком много деталей для расчёта раскроя (лимит 20 000).');continue}
+  let left=totalPieces;const layouts=[];
+  while(left>0){
+   let free=stock;const segments=[];
+   for(const part of ordered){
+    while(part.qty>0 && part.length+kerf<=free+1e-8){
+     segments.push(part.length);free-=part.length+kerf;part.qty--;left--;
+    }
+   }
+   if(!segments.length){warnings.push(p[0]+': не удалось разместить оставшиеся детали.');break}
+   layouts.push({segments,remaining:Math.max(0,free)});
   }
-  if(unallocated)continue;
-  const count=bins.length,unused=bins.reduce((a,b)=>a+b,0)/1000,groupCost=count*stock/1000*p[1]*p[3]/1000;
+  const count=layouts.length,unused=layouts.reduce((a,b)=>a+b.remaining,0)/1000,groupCost=count*stock/1000*p[1]*p[3]/1000;
   buyMass+=count*stock/1000*p[1];cost+=groupCost;bars+=count;scrap+=unused;
-  groups.push({name:p[0],stock,bars:count,scrap:unused,cost:groupCost});
+  groups.push({name:p[0],stock,bars:count,scrap:unused,cost:groupCost,layouts});
  }
  return {partMass,buyMass,cost,bars,scrap,groups,warnings};
 }
