@@ -121,7 +121,7 @@ function readDxfGeometry(raw){
    const val=c=>Number(e.pairs.find(p=>p[0]===String(c))?.[1]);
    if(e.type==='LINE')segments.push([[val(10),val(20)],[val(11),val(21)]]);
    else if(e.type==='ARC'){const x=val(10),y=val(20),radius=val(40),a=val(50)*Math.PI/180,b=val(51)*Math.PI/180,sweep=(b-a+2*Math.PI)%(2*Math.PI)||2*Math.PI;const n=Math.max(12,Math.ceil(sweep*radius/1.5));const points=Array.from({length:n+1},(_,i)=>[x+radius*Math.cos(a+sweep*i/n),y+radius*Math.sin(a+sweep*i/n)]);segments.push(points)}
-   else if(e.type==='CIRCLE'){const x=val(10),y=val(20),radius=val(40);rings.push(Array.from({length:Math.max(96,Math.ceil(2*Math.PI*radius))},(_,i,n)=>[x+radius*Math.cos(2*Math.PI*i/n),y+radius*Math.sin(2*Math.PI*i/n)]))}
+   else if(e.type==='CIRCLE'){const x=val(10),y=val(20),radius=val(40);const circleSteps=Math.max(96,Math.ceil(2*Math.PI*radius));rings.push(Array.from({length:circleSteps},(_,i)=>[x+radius*Math.cos(2*Math.PI*i/circleSteps),y+radius*Math.sin(2*Math.PI*i/circleSteps)]))}
    else if(e.type==='LWPOLYLINE'){
     const pts=[];let cur=null;for(const [code,value] of e.pairs){if(code==='10'){if(cur)pts.push(cur);cur={x:Number(value),y:NaN,b:0}}else if(code==='20'&&cur)cur.y=Number(value);else if(code==='42'&&cur)cur.b=Number(value)}if(cur)pts.push(cur);
     const flags=val(70)||0,closed=(flags&1)!==0;
