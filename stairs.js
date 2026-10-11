@@ -51,16 +51,17 @@ function read(){const h=Number($('height').value),r=Number($('run').value),w=Num
 function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').textContent='Проверьте размеры: высота 1800–4500 мм, длина 1800–7000 мм, ширина 600–1600 мм.';group.clear();return}const {h,r,w,count,rise,going,angle}=v;const good=rise>=150&&rise<=190&&going>=250&&going<=320&&angle>=25&&angle<=42;$('warning').textContent=good?'Геометрия выглядит предварительно допустимой, но требует проверки по применимым нормам, месту установки и конструктивным ограничениям.':'Внимание: геометрия может быть неудобной или небезопасной. Измените длину или высоту и обратитесь к проектировщику.';$('stats').innerHTML=[['Подъёмов',count],['Высота подъёма',rise.toFixed(1)+' мм'],['Глубина проступи',going.toFixed(1)+' мм'],['Уклон',angle.toFixed(1)+'°'],['Ширина',w+' мм'],['Длина',r+' мм']].map(([a,b])=>'<div class="stat"><span class="muted">'+a+'</span><b>'+b+'</b></div>').join('');const unusedProjectSummary=`Заявка из онлайн-конструктора лестниц.\nТип: прямая маршевая.\nВысота между чистыми полами: ${h} мм.\nДоступная длина: ${r} мм.\nШирина марша: ${w} мм.\nМатериал ступеней: ${$('treads').value==='wood'?'дерево':'металл'}.\nПредварительно: ${count} подъёмов по ${rise.toFixed(1)} мм; глубина проступи ${going.toFixed(1)} мм; уклон ${angle.toFixed(1)}°.\nКосоур: одна центральная профильная труба 120×120 мм, R10 (стенка 4 мм условно). Требуется проверка и профессиональный проект.`;
  group.clear();const H=h/1000,R=r/1000,W=w/1000;
  const treadThickness=.045,beamHalf=.060;
- const slope=Math.atan2(H,R),goingM=R/(count-1);
+ const beamRise=(count-1)*H/count;
+ const slope=Math.atan2(beamRise,R),goingM=R/(count-1);
  const treadDepth=Math.min(.27,goingM*.96);
- // The lower/rear bottom edge of each horizontal tread touches the
- // inclined upper face of the centered beam (conceptual edge contact).
+ // Each tread rises H/count, so the stringer must rise by exactly that
+ // amount per going; using full H over R causes cumulative intersections.
  // At the FRONT of a tread the inclined stringer is highest.
  // Position its upper face 2 mm below the tread bottom there,
  // preventing intersection along the entire tread depth.
- const clearance=.002;
+ const clearance=.008;
  const beamStartY=H/count-treadThickness/2-beamHalf/Math.cos(slope)-Math.tan(slope)*treadDepth-clearance;
- centralKosour([-R/2,beamStartY,0],[R/2,H+beamStartY,0]);
+ centralKosour([-R/2,beamStartY,0],[R/2,beamRise+beamStartY,0]);
  for(let i=0;i<count-1;i++){
   const rearX=-R/2+i*goingM;
   const x=rearX+treadDepth/2,y=(i+1)*H/count;
