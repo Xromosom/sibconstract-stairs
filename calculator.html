@@ -13,12 +13,12 @@ document.getElementById('addop').onclick=()=>{const name=operationNames[0];opera
 function paintedArea(row){
  const name=profiles[row.p][0],length=Math.max(0,Number(row.l)||0)/1000,qty=Math.max(0,Number(row.q)||0);
  let perimeter=null;
- let m=name.match(/(?:Труба(?: нерж)?\\s*)(\\d+)\\s*[*×хx]\\s*(\\d+)\\s*[*×хx]/i);
+ let m=name.match(/(?:Труба(?: нерж)?\s*)(\d+)\s*[*×хx]\s*(\d+)\s*[*×хx]/i);
  if(m)perimeter=2*(Number(m[1])+Number(m[2]))/1000;
- else {m=name.match(/(?:ТрубаD|ВГП\\s*)(\\d+)/i);if(m)perimeter=Math.PI*Number(m[1])/1000;}
- if(perimeter===null){m=name.match(/^Полоса\\s*(\\d+)\\s*[*×хx]\\s*(\\d+)/i);if(m)perimeter=2*(Number(m[1])+Number(m[2]))/1000;}
- if(perimeter===null){m=name.match(/^круг\\s*(\\d+)/i);if(m)perimeter=Math.PI*Number(m[1])/1000;}
- if(perimeter===null){m=name.match(/^Арматура\\s*(\\d+)/i);if(m)perimeter=Math.PI*Number(m[1])/1000;}
+ else {m=name.match(/(?:ТрубаD|ВГП\s*)(\d+)/i);if(m)perimeter=Math.PI*Number(m[1])/1000;}
+ if(perimeter===null){m=name.match(/^Полоса\s*(\d+)\s*[*×хx]\s*(\d+)/i);if(m)perimeter=2*(Number(m[1])+Number(m[2]))/1000;}
+ if(perimeter===null){m=name.match(/^круг\s*(\d+)/i);if(m)perimeter=Math.PI*Number(m[1])/1000;}
+ if(perimeter===null){m=name.match(/^Арматура\s*(\d+)/i);if(m)perimeter=Math.PI*Number(m[1])/1000;}
  return perimeter===null?null:perimeter*length*qty;
 }
 function syncJointOperations(){
