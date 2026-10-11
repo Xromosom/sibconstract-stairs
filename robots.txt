@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://sibconstract.github.io/sitemap.xml
