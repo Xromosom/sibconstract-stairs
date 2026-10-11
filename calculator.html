@@ -64,7 +64,7 @@ function readDxfGeometry(raw){
 
  // Раскрытие INSERT с сохранением поворота и равномерного масштаба.
  const blocks=new Map();let inBlocks=false,currentBlock=null,currentEntity=null;
- const flushBlockEntity=()=>{if(currentBlock&&currentEntity)currentBlock.entities.push(currentEntity);currentEntity=null};
+ const flushBlockEntity=()=>{if(currentBlock&&currentEntity&&currentEntity.type!=='BLOCK')currentBlock.entities.push(currentEntity);currentEntity=null};
  for(let i=0;i<pairs.length;i++){const [code,val]=pairs[i];
   if(code==='0'&&val==='SECTION'&&pairs[i+1]?.[0]==='2'){inBlocks=pairs[i+1][1]==='BLOCKS';continue}
   if(!inBlocks)continue;
