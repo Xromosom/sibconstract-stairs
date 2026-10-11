@@ -15,15 +15,15 @@ function drawCatalog(){
  [1,2,3].forEach(k=>{const td=document.createElement('td'),input=document.createElement('input');input.type='number';input.step=k===1?'0.000001':'1';input.min='0.000001';input.value=p[k];input.style.width='110px';input.onchange=()=>{const n=Number(input.value);if(!Number.isFinite(n)||n<=0){input.value=p[k];return}p[k]=n;drawCatalog();render()};td.append(input);tr.append(td)});
  const check=document.createElement('td');check.textContent=catalogMassCheck(p);tr.append(check);body.append(tr)});
 }
-document.getElementById('catalogSave').onclick=()=>{try{localStorage.setItem(catalogKey,JSON.stringify(profiles));document.getElementById('catalogStatus').textContent='Справочник сохранён в этом браузере.'}catch(e){document.getElementById('catalogStatus').textContent='Не удалось сохранить справочник.'}};
-document.getElementById('catalogReset').onclick=()=>{if(!confirm('Восстановить все исходные массы, цены и длины хлыстов?'))return;originalProfiles.forEach((p,i)=>{for(const k of [1,2,3])profiles[i][k]=p[k]});localStorage.removeItem(catalogKey);drawCatalog();render();document.getElementById('catalogStatus').textContent='Исходный справочник восстановлен.'};
+document.getElementById('catalogSave').onclick=()=>{try{localStorage.setItem(catalogKey,JSON.stringify(profiles.slice(0,originalProfiles.length)));localStorage.setItem('sibconstract_stalk_overrides_v1',JSON.stringify(Object.fromEntries(profiles.slice(originalProfiles.length).map(p=>[p[0],[p[1],p[2],p[3]]]))));document.getElementById('catalogStatus').textContent='Справочник сохранён в этом браузере.'}catch(e){document.getElementById('catalogStatus').textContent='Не удалось сохранить справочник.'}};
+document.getElementById('catalogReset').onclick=()=>{if(!confirm('Восстановить все исходные массы, цены и длины хлыстов?'))return;originalProfiles.forEach((p,i)=>{for(const k of [1,2,3])profiles[i][k]=p[k]});localStorage.removeItem(catalogKey);localStorage.removeItem('sibconstract_stalk_overrides_v1');drawCatalog();render();document.getElementById('catalogStatus').textContent='Исходный справочник восстановлен.'};
 drawCatalog();
 async function loadStalkPrices(){
  try{
  const res=await fetch('./stalk_prices_2026_10_06.json');
  if(!res.ok)throw Error('Не удалось загрузить файл цен');
  const data=await res.json();
- data.rows.forEach(row=>{
+ let overrides={};try{overrides=JSON.parse(localStorage.getItem('sibconstract_stalk_overrides_v1')||'{}')}catch(e){};data.rows.forEach(row=>{
  const [name,mass,length,price,category]=row;
  const label=name+' · СТАЛЬК '+length/1000+' м';
  let weld=0;
@@ -31,7 +31,7 @@ async function loadStalkPrices(){
  if(category==='Профильная труба'&&dims)weld=2*(+dims[1]+ +dims[2]);
  const round=name.match(/э\/с\s*(\d+)/);
  if(round)weld=Math.PI*Number(round[1]);
- profiles.push([label,mass,length,price,weld]);
+ const saved=overrides[label];profiles.push([label,...(Array.isArray(saved)&&saved.length===3&&saved.every(n=>Number.isFinite(n)&&n>0)?saved:[mass,length,price]),weld]);
  });
  document.getElementById('catalogStatus').textContent='Загружен прайс СТАЛЬК от 06.10.2026: '+data.rows.length+' позиций. Старые позиции сохранены для ранее созданных смет.';
  drawCatalog();render();
@@ -116,7 +116,7 @@ function calculateCutting(){
  return {partMass,buyMass,cost,bars,scrap,groups,warnings};
 }
 function paintedArea(row){
- const name=profiles[row.p][0],length=Math.max(0,Number(row.l)||0)/1000,qty=Math.max(0,Number(row.q)||0);
+ const name=profiles[row.p][0].replace(/ · СТАЛЬК.*$/,''),length=Math.max(0,Number(row.l)||0)/1000,qty=Math.max(0,Number(row.q)||0);
  let perimeter=null;
  let m=name.match(/(?:Труба(?: нерж)?\s*)(\d+)\s*[*×хx]\s*(\d+)\s*[*×хx]/i);
  if(m)perimeter=2*(Number(m[1])+Number(m[2]))/1000;
