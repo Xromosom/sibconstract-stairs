@@ -170,12 +170,12 @@ const admin='0c6a89e0-6a99-4549-b179-cc87aae46880',fields=['ends','speed','prep'
 const el=id=>document.getElementById(id),status=s=>el('estimateStatus').textContent=s;
 let activeId=null;
 async function authorized(){if(!sb){status('Библиотека Supabase не загружена.');return false}const {data,error}=await sb.auth.getUser();if(error||data.user?.id!==admin){status('Сначала войдите в CRM под учётной записью администратора, затем вернитесь в калькулятор.');return false}return true}
-function snapshot(){return {version:1,items:items.map(r=>({...r})),operations:operationRows.map(r=>({...r})),params:Object.fromEntries(fields.map(id=>[id,el(id).value]))}}
+function snapshot(){return {version:1,items:items.map(r=>({...r})),operations:operationRows.map(r=>({...r})),params:Object.fromEntries(fields.map(id=>[id,el(id).value])),sheet:{size:el('sheetPartSize').value,qty:el('sheetPartQty').value,material:el('sheetPartMaterial').value,kerf:el('sheetKerf').value}}}
 function restore(data){if(!data||data.version!==1||!Array.isArray(data.items)||!Array.isArray(data.operations))throw Error('Неподдерживаемый формат сметы');
  items.splice(0,items.length,...data.items.filter(r=>Number.isInteger(r.p)&&profiles[r.p]&&Number.isFinite(r.l)&&Number.isFinite(r.q)&&r.l>=0&&r.q>=0).map(r=>({p:r.p,l:r.l,q:r.q})));
  operationRows.splice(0,operationRows.length,...data.operations.filter(o=>operationNames.includes(o.name)).map(o=>({name:o.name,unit:String(o.unit||getRate(o.name).unit),qty:Math.max(0,Number(o.qty)||0),cost:Math.max(0,Number(o.cost)||0),markup:Math.max(0,Number(o.markup)||0)})));
  fields.forEach(id=>{if(data.params&&data.params[id]!==undefined&&Number.isFinite(Number(data.params[id])))el(id).value=data.params[id]});
- render();drawOps();
+ render();drawOps();if(data.sheet){const sh=data.sheet;for(const [id,value] of [['sheetPartSize',sh.size],['sheetPartQty',sh.qty],['sheetPartMaterial',sh.material],['sheetKerf',sh.kerf]])if(value!==undefined&&el(id))el(id).value=value;el('sheetPartCalc')?.click()}else{window.sheetCutCost=0;window.sheetCutSale=0;el('sheetPartResult').textContent='';calc()}
 }
 async function list(){if(!await authorized())return;const {data,error}=await sb.from('estimates').select('id,title,customer,updated_at').order('updated_at',{ascending:false}).limit(100);if(error){status('Не удалось загрузить сметы: '+error.message+'. Возможно, нужно выполнить SQL-настройку таблицы.');return}
  const root=el('estimateList');root.textContent='';const heading=document.createElement('p');heading.textContent='Сохранённых смет: '+data.length;root.append(heading);
