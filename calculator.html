@@ -17,7 +17,27 @@ function drawCatalog(){
 }
 document.getElementById('catalogSave').onclick=()=>{try{localStorage.setItem(catalogKey,JSON.stringify(profiles));document.getElementById('catalogStatus').textContent='Справочник сохранён в этом браузере.'}catch(e){document.getElementById('catalogStatus').textContent='Не удалось сохранить справочник.'}};
 document.getElementById('catalogReset').onclick=()=>{if(!confirm('Восстановить все исходные массы, цены и длины хлыстов?'))return;originalProfiles.forEach((p,i)=>{for(const k of [1,2,3])profiles[i][k]=p[k]});localStorage.removeItem(catalogKey);drawCatalog();render();document.getElementById('catalogStatus').textContent='Исходный справочник восстановлен.'};
-drawCatalog();const items=[];const $=id=>document.getElementById(id),v=id=>Math.max(0,Number($(id).value)||0),rub=n=>n.toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽';function add(){items.push({p:0,l:1000,q:1});render()}function render(){const tbody=$('rows');tbody.textContent='';items.forEach((r,i)=>{let tr=document.createElement('tr');let td=()=>{let x=document.createElement('td');tr.append(x);return x};let sel=document.createElement('select');profiles.forEach((p,j)=>{let o=document.createElement('option');o.value=j;o.textContent=p[0];o.selected=j===r.p;sel.append(o)});sel.onchange=()=>{r.p=+sel.value;render()};td().append(sel);for(let k of ['l','q']){let inp=document.createElement('input');inp.type='number';inp.min=0;inp.value=r[k];inp.oninput=()=>{r[k]=Math.max(0,+inp.value||0);calc()};td().append(inp)}for(let j=0;j<4;j++)td();let b=document.createElement('button');b.textContent='×';b.onclick=()=>{items.splice(i,1);render()};td().append(b);tbody.append(tr)});calc()}function calc(){let mass=0,metal=0,joints=0,weld=0,warnings=[];items.forEach((r,i)=>{let p=profiles[r.p],m=r.l*r.q*p[1]/1000,j=r.q*v('ends'),w=j*p[4]/1000,c=m*p[3]/1000;mass+=m;metal+=c;joints+=j;weld+=w;let cells=$('rows').children[i].children;[m.toFixed(2),j,w.toFixed(2),rub(c)].forEach((x,k)=>cells[k+3].textContent=x);if(r.l>p[2])warnings.push(p[0]+': длина превышает стандартный хлыст')});const cut=calculateCutting();
+drawCatalog();
+async function loadStalkPrices(){
+ try{
+ const res=await fetch('./stalk_prices_2026_10_06.json');
+ if(!res.ok)throw Error('Не удалось загрузить файл цен');
+ const data=await res.json();
+ data.rows.forEach(row=>{
+ const [name,mass,length,price,category]=row;
+ const label=name+' · СТАЛЬК '+length/1000+' м';
+ let weld=0;
+ const dims=name.match(/^(\d+)\*(\d+)\*/);
+ if(category==='Профильная труба'&&dims)weld=2*(+dims[1]+ +dims[2]);
+ const round=name.match(/э\/с\s*(\d+)/);
+ if(round)weld=Math.PI*Number(round[1]);
+ profiles.push([label,mass,length,price,weld]);
+ });
+ document.getElementById('catalogStatus').textContent='Загружен прайс СТАЛЬК от 06.10.2026: '+data.rows.length+' позиций. Старые позиции сохранены для ранее созданных смет.';
+ drawCatalog();render();
+ }catch(err){document.getElementById('catalogStatus').textContent='Не удалось загрузить прайс: '+err.message}
+}
+loadStalkPrices();const items=[];const $=id=>document.getElementById(id),v=id=>Math.max(0,Number($(id).value)||0),rub=n=>n.toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽';function add(){items.push({p:0,l:1000,q:1});render()}function render(){const tbody=$('rows');tbody.textContent='';items.forEach((r,i)=>{let tr=document.createElement('tr');let td=()=>{let x=document.createElement('td');tr.append(x);return x};let sel=document.createElement('select');profiles.forEach((p,j)=>{let o=document.createElement('option');o.value=j;o.textContent=p[0];o.selected=j===r.p;sel.append(o)});sel.onchange=()=>{r.p=+sel.value;render()};td().append(sel);for(let k of ['l','q']){let inp=document.createElement('input');inp.type='number';inp.min=0;inp.value=r[k];inp.oninput=()=>{r[k]=Math.max(0,+inp.value||0);calc()};td().append(inp)}for(let j=0;j<4;j++)td();let b=document.createElement('button');b.textContent='×';b.onclick=()=>{items.splice(i,1);render()};td().append(b);tbody.append(tr)});calc()}function calc(){let mass=0,metal=0,joints=0,weld=0,warnings=[];items.forEach((r,i)=>{let p=profiles[r.p],m=r.l*r.q*p[1]/1000,j=r.q*v('ends'),w=j*p[4]/1000,c=m*p[3]/1000;mass+=m;metal+=c;joints+=j;weld+=w;let cells=$('rows').children[i].children;[m.toFixed(2),j,w.toFixed(2),rub(c)].forEach((x,k)=>cells[k+3].textContent=x);if(r.l>p[2])warnings.push(p[0]+': длина превышает стандартный хлыст')});const cut=calculateCutting();
  metal=cut.cost;
  const cutBox=document.getElementById('cutSummary');
  if(cutBox)cutBox.textContent='Масса деталей: '+cut.partMass.toFixed(2)+' кг · Закупка: '+cut.buyMass.toFixed(2)+' кг · Хлыстов: '+cut.bars+' · Отходы: '+cut.scrap.toFixed(2)+' м · Стоимость закупки: '+rub(cut.cost);
