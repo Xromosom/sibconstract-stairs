@@ -118,6 +118,38 @@ function roundedTread(x,y,depth,thickness,width,material){
 }
 // Vertical 100x100 mm tube support, R10 outer corners; 4 mm assumed wall.
 // Top mounting plate: 180x180x5 mm, four visible screw heads underneath.
+// Horizontal rounded mounting plate: corner radius 30 mm.
+function roundedMountingPlate(x,y,z,length,width,thickness,radius,material){
+ const sh=new THREE.Shape(),hx=length/2,hy=width/2,r=Math.min(radius,hx,hy);
+ sh.moveTo(-hx+r,-hy);sh.lineTo(hx-r,-hy);
+ sh.quadraticCurveTo(hx,-hy,hx,-hy+r);sh.lineTo(hx,hy-r);
+ sh.quadraticCurveTo(hx,hy,hx-r,hy);sh.lineTo(-hx+r,hy);
+ sh.quadraticCurveTo(-hx,hy,-hx,hy-r);sh.lineTo(-hx,-hy+r);
+ sh.quadraticCurveTo(-hx,-hy,-hx+r,-hy);
+ const g=new THREE.ExtrudeGeometry(sh,{depth:thickness,bevelEnabled:false,curveSegments:12});
+ g.rotateX(-Math.PI/2);
+ const m=new THREE.Mesh(g,material);m.position.set(x,y,z);group.add(m);
+}
+function upperAnchorPlate(faceX,centerY){
+ // 200x200x10 mm vertical end plate, attached to the landing face.
+ const thick=.010,size=.20,r=.020;
+ const sh=new THREE.Shape(),h=size/2;
+ sh.moveTo(-h+r,-h);sh.lineTo(h-r,-h);sh.quadraticCurveTo(h,-h,h,-h+r);
+ sh.lineTo(h,h-r);sh.quadraticCurveTo(h,h,h-r,h);sh.lineTo(-h+r,h);
+ sh.quadraticCurveTo(-h,h,-h,h-r);sh.lineTo(-h,-h+r);sh.quadraticCurveTo(-h,-h,-h+r,-h);
+ const g=new THREE.ExtrudeGeometry(sh,{depth:thick,bevelEnabled:false,curveSegments:10});
+ // Shape XY -> world ZY, extrusion -> world X.
+ g.rotateY(Math.PI/2);
+ const plate=new THREE.Mesh(g,steel);plate.position.set(faceX-thick,centerY,0);group.add(plate);
+ const anchorMat=new THREE.MeshStandardMaterial({color:0xc1c8ce,metalness:.8,roughness:.28});
+ // Four schematic M10 anchors on the accessible (stair) side.
+ for(const yy of [-.073,.073])for(const zz of [-.073,.073]){
+  const head=new THREE.Mesh(new THREE.CylinderGeometry(.009,.009,.006,16),anchorMat);
+  head.rotation.z=Math.PI/2;head.position.set(faceX-thick-.003,centerY+yy,zz);group.add(head);
+  const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.005,.005,.040,12),anchorMat);
+  shaft.rotation.z=Math.PI/2;shaft.position.set(faceX+.018,centerY+yy,zz);group.add(shaft);
+ }
+}
 function stepSupport(x,treadBottom,beamTop){
  const plateThickness=.005,plateLength=.18,plateWidth=.30,tubeSide=.100,tubeWall=.004;
  const plateBottom=treadBottom-plateThickness;
@@ -131,7 +163,7 @@ function stepSupport(x,treadBottom,beamTop){
  const tube=new THREE.Mesh(g,steel);
  // Extrusion after rotation runs upward along Y.
  tube.position.set(x,postBottom,0);group.add(tube);
- box(x,plateBottom+plateThickness/2,0,plateLength,plateThickness,plateWidth,steel);
+ roundedMountingPlate(x,plateBottom,0,plateLength,plateWidth,plateThickness,.030,steel);
  const screwMat=new THREE.MeshStandardMaterial({color:0xb9bec3,metalness:.85,roughness:.3});
  for(const dx of [-.073,.073])for(const dz of [-.128,.128]){
   const head=new THREE.Mesh(new THREE.CylinderGeometry(.005,.005,.002,12),screwMat);
@@ -166,6 +198,8 @@ function render(){const v=read();if(!v){$('stats').innerHTML='';$('warning').tex
  const landingLength=.75;
  box(landingFaceX+landingLength/2,H-landingThickness/2,0,landingLength,landingThickness,W+.30,
   new THREE.MeshStandardMaterial({color:0xa4adb6,roughness:.88}));
+ // Plate is placed on the stringer's vertical end, with M10 anchors into slab.
+ upperAnchorPlate(landingFaceX,beamEndY);
  for(let i=0;i<count-1;i++){
   const rearX=-R/2+i*goingM;
   const x=rearX+treadDepth/2,y=(i+1)*H/count;
