@@ -264,22 +264,34 @@ list();
   const customer=document.getElementById('estimateCustomer').value.trim()||'Не указан';
   const lead=document.getElementById('proposalLead').value.trim()||'По согласованию';
   const validity=document.getElementById('proposalValidity').value.trim()||'По согласованию';
-  const profileRows=items.filter(r=>r.q>0&&r.l>0&&profiles[r.p]).map(r=>({name:profiles[r.p][0],size:r.l+' мм',qty:r.q}));const sheetRows=sheetItems.filter(r=>r.qty>0&&sheetCatalog[r.material]).map(r=>({name:'Лист — '+sheetCatalog[r.material].name,size:r.w+' × '+r.h+' мм',qty:r.qty}));const rows=[...profileRows,...sheetRows].map((r,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.size)+'</td><td>'+esc(r.qty)+'</td></tr>').join('');
+  const fmt=n=>Number(n).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const sheetData=sheetItems.filter(r=>r.qty>0&&sheetCatalog[r.material]).map(r=>{const p=sheetCatalog[r.material];return {name:p.name,size:r.w+' × '+r.h+' мм',qty:r.qty,mass:r.w*r.h*r.qty/(p.widthMm*p.heightMm)*p.kgPerSheet,area:r.w*r.h*r.qty,perimeter:2*(r.w+r.h)*r.qty}}); 
+  const profileData=items.filter(r=>r.q>0&&r.l>0&&profiles[r.p]).map(r=>({name:profiles[r.p][0],size:r.l+' мм',qty:r.q,mass:r.l*r.q*profiles[r.p][1]/1000}));
+  const sheetArea=sheetData.reduce((n,r)=>n+r.area,0),sheetPerimeter=sheetData.reduce((n,r)=>n+r.perimeter,0);
+  const sheetSale=window.sheetCutSale||0;
+  const duplicateLaser=operationRows.some(o=>o.name==='Лазерная резка'&&o.qty>0);
+  const laserSale=!duplicateLaser&&document.getElementById('laserEnabled').checked?laserEstimate().sale:0;
+  const manualLaser=operationRows.filter(o=>o.name==='Лазерная резка').reduce((n,o)=>n+o.qty*o.cost*(1+o.markup/100),0);
+  const laserTotal=laserSale+manualLaser;
+  const sheetPriceRows=sheetData.map(r=>{const metalPart=sheetArea?sheetSale*r.area/sheetArea:0;const laserPart=sheetPerimeter?laserTotal*r.perimeter/sheetPerimeter:0;return {...r,estimatedPrice:metalPart+laserPart}});
+  const rows=[...profileData.map(r=>({name:r.name,size:r.size,qty:r.qty,mass:r.mass,estimatedPrice:null})),...sheetPriceRows].map((r,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.size)+'</td><td>'+esc(r.qty)+'</td><td>'+esc(fmt(r.mass))+'</td><td>'+(r.estimatedPrice===null?'В составе заказа':esc(fmt(r.estimatedPrice/r.qty))+' ₽')+'</td></tr>').join('');
+  const sheetMass=sheetData.reduce((n,r)=>n+r.mass,0),profileMass=profileData.reduce((n,r)=>n+r.mass,0);
+  const breakdown=sheetData.length?'<h2>Состав стоимости листовых деталей</h2><table><tbody><tr><td>Металл (с наценкой)</td><td>'+esc(fmt(sheetSale))+' ₽</td></tr><tr><td>Лазерная резка (с наценкой)</td><td>'+esc(fmt(laserTotal))+' ₽</td></tr></tbody></table><p class="muted">Цена за листовую деталь распределена пропорционально площади металла и длине внешнего контура реза. Это ориентировочное распределение, не отдельная твёрдая цена. Прочие работы и расходы учтены в общей сумме КП.</p>':'';
   const date=new Date().toLocaleDateString('ru-RU');
   const html='<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>КП — '+esc(title)+'</title><style>'+
    '@page{size:210mm 297mm;margin:15mm}*{box-sizing:border-box}html{background:#e6eaf0}body{font:14px/1.55 Arial,sans-serif;color:#192b40;width:210mm;min-height:297mm;padding:18mm 15mm;margin:24px auto;background:#fff;box-shadow:0 4px 24px #aab4c4}'+
    '.brand{display:flex;align-items:center;gap:13px;font-size:27px;font-weight:800;letter-spacing:1px;color:#142234;border-bottom:4px solid #ffb64c;padding-bottom:13px}.mark{width:52px;height:52px;flex:none;background:#142234;color:#ffb64c;display:grid;place-items:center;font-size:29px;font-weight:900;clip-path:polygon(22% 0,100% 0,100% 75%,78% 100%,0 100%,0 22%)}.brand small{display:block;font-size:11px;font-weight:500;letter-spacing:0;color:#536477}.web{color:#b57417;text-decoration:none}'+
-   '.top{display:flex;justify-content:space-between;gap:20px;margin:24px 0}.muted{color:#607083}h1{font-size:22px;margin:25px 0 15px}'+
-   'table{border-collapse:collapse;width:100%;margin:18px 0}th{background:#eaf0f5;text-align:left}td,th{padding:9px;border-bottom:1px solid #dce3ea}'+
+   '.top{display:flex;justify-content:space-between;gap:20px;margin:24px 0}.muted{color:#607083}h1{font-size:22px;margin:25px 0 15px}h2{font-size:17px;margin-top:24px}'+
+   'table{border-collapse:collapse;width:100%;margin:18px 0}th{background:#eaf0f5;text-align:left}td,th{padding:7px;border-bottom:1px solid #dce3ea;font-size:12px}'+
    '.total{background:#f4f7fa;padding:18px 20px;border-left:5px solid #ffb64c;margin-top:24px;font-size:21px;font-weight:700}'+
    '.footer{margin-top:35px;border-top:1px solid #ccd5df;padding-top:12px;font-size:12px;color:#526376}'+
    '.controls{position:fixed;top:10px;right:10px;background:#fff;padding:12px;border:1px solid #ddd}'+
    '@media print{html{background:#fff}body{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}.controls{display:none}thead{display:table-header-group}tr{break-inside:avoid}}'+
    '</style></head><body><div class="controls"><button onclick="window.print()">Печать / Сохранить в PDF</button></div>'+
    '<div class="brand"><span class="mark">С</span><span>СИБКОНСТРАКТ<small>Металлоконструкции на заказ · <span class="web">sibconstract.github.io</span></small></span></div><div class="top"><div><b>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</b><br><span class="muted">от '+esc(date)+'</span></div><div><b>Заказчик:</b><br>'+esc(customer)+'</div></div>'+
-   '<h1>'+esc(title)+'</h1><p>Предлагаем изготовление металлоконструкций по следующей спецификации:</p>'+
-   '<table><thead><tr><th>№</th><th>Материал / профиль</th><th>Размер детали</th><th>Кол-во, шт.</th></tr></thead><tbody>'+rows+'</tbody></table>'+
-   '<p><b>Масса листовых деталей:</b> '+esc((sheetItems.reduce((n,it)=>{const p=sheetCatalog[it.material];return p?n+it.w*it.h*it.qty/(p.widthMm*p.heightMm)*p.kgPerSheet:n},0)).toFixed(2))+' кг</p>'+ '<div class="total">Стоимость предложения: '+esc(price)+'</div>'+
+   '<h1>'+esc(title)+'</h1><p>Предлагаем выполнить работы по следующей спецификации:</p>'+
+   '<table><thead><tr><th>№</th><th>Материал / профиль</th><th>Размер детали</th><th>Кол-во, шт.</th><th>Масса, кг</th><th>Расчётная цена за шт.</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+   '<p><b>Масса листовых деталей:</b> '+esc(fmt(sheetMass))+' кг · <b>Масса профильных деталей:</b> '+esc(fmt(profileMass))+' кг · <b>Общая масса деталей:</b> '+esc(fmt(sheetMass+profileMass))+' кг</p>'+breakdown+'<div class="total">Стоимость предложения: '+esc(price)+'</div>'+
    '<p><b>Срок изготовления:</b> '+esc(lead)+'</p><p><b>Предложение действительно:</b> '+esc(validity)+'</p>'+
    '<p>Комплектация, доставка, монтаж и условия оплаты согласовываются отдельно, если они не включены в утверждённую смету.</p>'+
    '<div class="footer"><b>СИБКОНСТРАКТ</b> · sibconstract.github.io<br>Предложение подготовлено на основании текущего расчёта. Условия заказа уточняются при согласовании.</div>'+
