@@ -29,22 +29,33 @@ function centralKosour(a,b){
  group.add(mesh);
 }
 // Rounded tread with 4 mm edge and corner radii.
+// All twelve tread edges (top, bottom and four vertical corners)
+// receive a true 4 mm radius, rather than just rounding the plan outline.
 function roundedTread(x,y,depth,thickness,width,material){
- const radius=.004, shape=new THREE.Shape();
- const hx=depth/2-radius, hy=width/2-radius;
- shape.moveTo(-hx,-hy-radius);
- shape.lineTo(hx,-hy-radius);
- shape.quadraticCurveTo(hx+radius,-hy-radius,hx+radius,-hy);
- shape.lineTo(hx+radius,hy);
- shape.quadraticCurveTo(hx+radius,hy+radius,hx,hy+radius);
- shape.lineTo(-hx,hy+radius);
- shape.quadraticCurveTo(-hx-radius,hy+radius,-hx-radius,hy);
- shape.lineTo(-hx-radius,-hy);
- shape.quadraticCurveTo(-hx-radius,-hy-radius,-hx,-hy-radius);
- const geometry=new THREE.ExtrudeGeometry(shape,{depth:thickness-2*radius,bevelEnabled:true,bevelThickness:radius,bevelSize:0,bevelSegments:4,curveSegments:6});
- geometry.translate(0,0,-(thickness-2*radius)/2);
+ const radius=.004;
+ const halfX=depth/2-radius, halfY=width/2-radius;
+ const corner=.0001; // tiny core corner; bevel supplies the 4 mm roundover
+ const shape=new THREE.Shape();
+ shape.moveTo(-halfX+corner,-halfY);
+ shape.lineTo(halfX-corner,-halfY);
+ shape.quadraticCurveTo(halfX,-halfY,halfX,-halfY+corner);
+ shape.lineTo(halfX,halfY-corner);
+ shape.quadraticCurveTo(halfX,halfY,halfX-corner,halfY);
+ shape.lineTo(-halfX+corner,halfY);
+ shape.quadraticCurveTo(-halfX,halfY,-halfX,halfY-corner);
+ shape.lineTo(-halfX,-halfY+corner);
+ shape.quadraticCurveTo(-halfX,-halfY,-halfX+corner,-halfY);
+ const coreThickness=thickness-2*radius;
+ const geometry=new THREE.ExtrudeGeometry(shape,{
+  depth:coreThickness,bevelEnabled:true,
+  bevelThickness:radius,bevelSize:radius,
+  bevelSegments:6,curveSegments:6,steps:1
+ });
+ geometry.translate(0,0,-coreThickness/2);
  geometry.rotateX(-Math.PI/2);
- const mesh=new THREE.Mesh(geometry,material);mesh.position.set(x,y,0);group.add(mesh);
+ geometry.computeVertexNormals();
+ const mesh=new THREE.Mesh(geometry,material);
+ mesh.position.set(x,y,0);group.add(mesh);
 }
 function box(x,y,z,w,h,d,mat){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);group.add(m)}
 function read(){const h=Number($('height').value),r=Number($('run').value),w=Number($('width').value);if(![h,r,w].every(Number.isFinite)||h<1800||h>4500||r<1800||r>7000||w<600||w>1600)return null;const count=Math.max(1,Math.round(h/170)),rise=h/count,going=r/(count-1),angle=Math.atan(h/r)*180/Math.PI;return {h,r,w,count,rise,going,angle}}
