@@ -389,19 +389,26 @@ list();
   const weldingPrice=manualWelding?0:(weldHours*v('rate')+weldMeters*v('cons'))*(1+v('mw')/100);
   const productionOverhead=(cutInfo.cost+(manualWelding?0:weldHours*v('rate')+weldMeters*v('cons')))*v('over')/100;
   const detailLines=[];
-  const addDetail=(name,description,amount)=>{if(Number.isFinite(amount)&&Math.abs(amount)>.005)detailLines.push({name,description,amount})};
-  addDetail('Профильный металлопрокат','Закупка и использование профильных труб и другого проката для '+profileData.reduce((n,r)=>n+r.qty,0)+' деталей',profileMetalPrice);
-  addDetail('Сварочные работы','Подготовка и сварка соединений · расчётно '+jointsCount.toFixed(0)+' соединений, '+weldMeters.toFixed(2)+' м шва',weldingPrice);
-  addDetail('Общепроизводственные расходы','Организация изготовления, оборудование и сопутствующие затраты',productionOverhead);
-  addDetail('Листовой металл','Стоимость металла непосредственно в деталях',sheetSale);
-  operationRows.forEach(o=>{const amount=o.qty*o.cost*(1+o.markup/100);addDetail(o.name||'Дополнительная операция',String(Number(o.qty.toFixed(3)))+' '+o.unit,amount)});
-  if(laserSale>0)addDetail('Лазерная резка','Резка листовых деталей на оборудовании исполнителя',laserSale);
+  const addDetail=(category,name,description,amount)=>{if(Number.isFinite(amount)&&amount>.005)detailLines.push({category,name,description,amount})};
+  addDetail('Материалы','Профильный металлопрокат','Профильные трубы и другой прокат для '+profileData.reduce((n,r)=>n+r.qty,0)+' деталей',profileMetalPrice);
+  addDetail('Материалы','Листовой металл','Металл непосредственно в листовых деталях',sheetSale);
+  addDetail('Изготовление и сварка','Сварочные работы','Подготовка и сварка · расчётно '+jointsCount.toFixed(0)+' соединений, '+weldMeters.toFixed(2)+' м шва',weldingPrice);
+  addDetail('Изготовление и сварка','Организация и обеспечение производства','Оборудование, организация изготовления и сопутствующие расходы',productionOverhead);
+  const paintOps=new Set(['Грунтовка','Порошковая покраска','Жидкая покраска']);
+  const fabOps=new Set(['Резка металла','Сверление отверстий','Гибка','Сварка MIG/MAG','Сварка MMA','Сварка TIG','Зачистка швов','Шлифовка','Сборка']);
+  operationRows.forEach(o=>{const amount=o.qty*o.cost*(1+o.markup/100);const category=paintOps.has(o.name)?'Покраска':fabOps.has(o.name)?'Изготовление и сварка':'Дополнительные работы';addDetail(category,o.name||'Дополнительная операция',String(Number(o.qty.toFixed(3)))+' '+o.unit,amount)});
+  addDetail('Изготовление и сварка','Лазерная резка','Резка листовых деталей на оборудовании исполнителя',laserSale);
   const parsedTotal=Number(String(price).replace(/[^0-9,.-]/g,'').replace(',','.'));
   const detailedTotal=detailLines.reduce((n,x)=>n+x.amount,0);
-  const difference=parsedTotal-detailedTotal;
-  if(!Number.isFinite(parsedTotal)||Math.abs(difference)>0.10){alert('КП не сформировано: сумма статей ('+fmt(detailedTotal)+' ₽) не совпадает с итогом калькулятора ('+price+'). Проверьте расчёт или сообщите об ошибке.');return}
-  const detailedRows=detailLines.map((r,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+esc(r.name)+'</b><div class="muted">'+esc(r.description)+'</div></td><td style="text-align:right;white-space:nowrap">'+esc(fmt(r.amount))+' ₽</td></tr>').join('');
-  const detailedBreakdown='<h2>Из чего складывается стоимость заказа</h2><table><thead><tr><th>№</th><th>Статья</th><th style="text-align:right">Стоимость</th></tr></thead><tbody>'+detailedRows+'</tbody></table><p class="muted">Стоимость включает материалы, изготовление и указанные дополнительные операции. Внутренние закупочные цены и производственная себестоимость в предложении не раскрываются.</p>';
+  if(!Number.isFinite(parsedTotal)||Math.abs(parsedTotal-detailedTotal)>0.10){alert('КП не сформировано: сумма статей ('+fmt(detailedTotal)+' ₽) не совпадает с итогом калькулятора ('+price+'). Проверьте расчёт или сообщите об ошибке.');return}
+  const categoryOrder=['Материалы','Изготовление и сварка','Покраска','Дополнительные работы'];
+  const detailedSections=categoryOrder.map(category=>{
+    const lines=detailLines.filter(x=>x.category===category);if(!lines.length)return '';
+    const subtotal=lines.reduce((n,x)=>n+x.amount,0);
+    const rows=lines.map(x=>'<tr><td style="padding-left:20px"><b>'+esc(x.name)+'</b><div class="muted">'+esc(x.description)+'</div></td><td style="text-align:right;white-space:nowrap">'+esc(fmt(x.amount))+' ₽</td></tr>').join('');
+    return '<h3 style="margin:20px 0 4px;font-size:14px;color:#263b53">'+esc(category)+'</h3><table style="margin:5px 0 12px"><thead><tr><th>Состав работ и материалов</th><th style="text-align:right">Стоимость</th></tr></thead><tbody>'+rows+'<tr style="background:#f0f4f8;font-weight:700"><td>Итого по разделу</td><td style="text-align:right;white-space:nowrap">'+esc(fmt(subtotal))+' ₽</td></tr></tbody></table>';
+  }).join('');
+  const detailedBreakdown='<h2>Из чего складывается стоимость заказа</h2>'+detailedSections+'<p class="muted">Стоимость включает перечисленные материалы и работы. Внутренние закупочные цены, себестоимость и прибыль исполнителя в предложении не раскрываются.</p>';
   const sheetMass=sheetData.reduce((n,r)=>n+r.mass,0),profileMass=profileData.reduce((n,r)=>n+r.mass,0);
   const breakdown=sheetData.length?'<h2>Состав стоимости листовых деталей</h2><table><tbody><tr><td>Металл (с наценкой)</td><td>'+esc(fmt(sheetSale))+' ₽</td></tr><tr><td>Лазерная резка (с наценкой)</td><td>'+esc(fmt(laserTotal))+' ₽</td></tr></tbody></table><p class="muted">Клиент оплачивает только металл в деталях (с учётом отверстий, когда площадь известна); остатки листа остаются у исполнителя. Лазерная резка распределена пропорционально длине контура. Это ориентировочное распределение, не отдельная твёрдая цена. Прочие работы и расходы учтены в общей сумме КП.</p>':'';
   const date=new Date().toLocaleDateString('ru-RU');
